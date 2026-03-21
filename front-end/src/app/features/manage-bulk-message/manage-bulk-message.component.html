@@ -1,0 +1,103 @@
+<div class="bulk-wrapper">
+
+  <!-- HEADER -->
+  <div class="header">
+    <h2>Manage Bulk Messaging</h2>
+    <p>Send announcements to selected customer groups</p>
+  </div>
+
+  <div class="bulk-layout">
+
+    <!-- ================= LEFT PANEL ================= -->
+    <div class="bulk-form-panel">
+
+      <!-- Select Group -->
+      <div class="form-group">
+        <label>Select Group</label>
+        <select [(ngModel)]="selectedGroup" (change)="onGroupChange()">
+          <option [ngValue]="null">
+            {{ isLoadingGroups ? 'Loading groups...' : (hasGroups ? '-- Select Group --' : 'No groups available') }}
+          </option>
+          <option *ngFor="let group of groups" [ngValue]="group">
+            {{ group.name }} ({{ group.numbers?.length || group.contacts.length || 0 }})
+          </option>
+        </select>
+
+        <div class="member-badge"
+             *ngIf="selectedGroup">
+          {{ selectedGroupMemberCount }} Members
+        </div>
+
+        <div class="field-note empty-state"
+             *ngIf="!isLoadingGroups && !hasGroups">
+          No groups found. Create a group first to send a bulk message.
+        </div>
+      </div>
+
+      <!-- Message -->
+      <div class="form-group">
+        <label>Message</label>
+        <textarea rows="6"
+                  placeholder="Enter your message..."
+                  [(ngModel)]="messageText">
+        </textarea>
+      </div>
+
+      <!-- Attachment -->
+      <div class="form-group">
+        <label>Attachment (Optional)</label>
+
+        <div class="file-upload">
+          <input type="file" accept="image/*" (change)="onFileSelect($event)">
+          <span *ngIf="selectedFile">
+            {{ selectedFile.name }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Send Button -->
+      <div class="action-section">
+        <button class="btn-send"
+                [disabled]="!canSend"
+                (click)="sendBulkMessage()">
+          Send Message
+        </button>
+      </div>
+
+    </div>
+
+    <!-- ================= RIGHT PANEL ================= -->
+    <div class="preview-panel">
+
+      <h3>Live Preview</h3>
+
+      <div class="preview-box">
+
+        <div class="preview-header">
+          {{ selectedGroup?.name || 'Group Name' }}
+        </div>
+
+        <div class="preview-meta" *ngIf="selectedGroup">
+          {{ selectedGroupMemberCount }} members selected
+        </div>
+
+        <div class="preview-message">
+          {{ messageText || 'Your message preview will appear here...' }}
+        </div>
+
+        <div class="preview-image" *ngIf="imagePreviewUrl">
+          <img [src]="imagePreviewUrl" alt="Selected image preview">
+        </div>
+
+        <div class="preview-attachment"
+             *ngIf="selectedFile">
+          📎 {{ selectedFile.name }}
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>

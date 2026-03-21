@@ -1,0 +1,14 @@
+<nav class="breadcrumb" aria-label="Breadcrumb" *ngIf="renderedItems.length > 0">
+  <ng-container *ngFor="let item of renderedItems; let last = last">
+    <button
+      type="button"
+      class="breadcrumb-item"
+      [class.current]="!item.clickable"
+      [disabled]="!item.clickable"
+      (click)="navigate(item)">
+      {{ item.label }}
+    </button>
+
+    <span class="separator" *ngIf="!last">/</span>
+  </ng-container>
+</nav>

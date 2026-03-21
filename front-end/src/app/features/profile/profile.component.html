@@ -1,0 +1,78 @@
+<div class="profile-page">
+  <div class="profile-card">
+
+    <!-- Card Header -->
+    <div class="card-header">
+      <div class="avatar-circle">{{ initials }}</div>
+      <h2>{{ currentUser?.name || 'User' }}</h2>
+      <p class="email-text">{{ currentUser?.email }}</p>
+      <span class="role-badge">{{ currentUser?.role || 'user' }}</span>
+    </div>
+
+    <!-- Card Body -->
+    <div class="card-body">
+      <form class="profile-form" [formGroup]="profileForm" (ngSubmit)="saveProfile()">
+
+        <!-- Account Details -->
+        <div class="section-title">Account Details</div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Full Name</label>
+            <input
+              formControlName="name"
+              type="text"
+              placeholder="Enter your full name"
+              [class.field-invalid]="profileForm.get('name')?.invalid && profileForm.get('name')?.touched" />
+            <span class="field-error"
+              *ngIf="profileForm.get('name')?.invalid && profileForm.get('name')?.touched">
+              Name is required (min 2 characters).
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label>Email Address</label>
+            <input formControlName="email" type="email" class="field-readonly" readonly />
+            <span class="field-hint">Email cannot be changed.</span>
+          </div>
+        </div>
+
+        <!-- Change Password -->
+        <div class="section-title section-gap">Change Password</div>
+        <p class="section-hint">Leave blank to keep your current password.</p>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>New Password</label>
+            <input
+              formControlName="newPassword"
+              type="password"
+              placeholder="New password (min 5 characters)" />
+          </div>
+
+          <div class="form-group">
+            <label>Confirm Password</label>
+            <input
+              formControlName="confirmPassword"
+              type="password"
+              placeholder="Repeat new password"
+              [class.field-invalid]="passwordMismatch" />
+            <span class="field-error" *ngIf="passwordMismatch">
+              Passwords do not match.
+            </span>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="form-actions">
+          <button type="submit" class="btn-save" [disabled]="saving">
+            <i class="fa-solid" [ngClass]="saving ? 'fa-spinner fa-spin' : 'fa-floppy-disk'"></i>
+            {{ saving ? 'Saving...' : 'Save Changes' }}
+          </button>
+        </div>
+
+      </form>
+    </div>
+
+  </div>
+</div>

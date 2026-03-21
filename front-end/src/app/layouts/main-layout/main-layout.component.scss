@@ -1,0 +1,272 @@
+@import '../../shared/styles/variables';
+
+/* ===== Layout Wrapper ===== */
+.main-layout {
+  --header-height: 80px;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: $bg-page;
+  padding-top: var(--header-height);
+}
+
+/* ===== Header ===== */
+.top-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  height: var(--header-height);
+  box-sizing: border-box;
+
+  background: linear-gradient(135deg, $primary-dark 0%, $primary-darker 100%);
+  color: $text-white;
+
+  padding: 12px $spacing-xl;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  box-shadow: $shadow-lg;
+}
+
+/* ===== Left Section ===== */
+.left {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.subtitle {
+  font-size: 13px;
+  opacity: 0.6;
+  margin-top: 4px;
+}
+
+/* ===== Right Section ===== */
+.right {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+}
+
+.reminder-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s ease;
+
+  i {
+    font-size: 14px;
+  }
+
+  &:hover {
+    background: rgba(96, 165, 250, 0.18);
+    border-color: rgba(96, 165, 250, 0.45);
+  }
+
+  &.active {
+    background: rgba(96, 165, 250, 0.24);
+    border-color: rgba(147, 197, 253, 0.65);
+  }
+}
+
+/* ===== Notification Bell ===== */
+.notification {
+  position: relative;
+  cursor: pointer;
+
+  i {
+    font-size: 18px;
+    transition: 0.2s ease;
+  }
+
+  &:hover i {
+    color: #60a5fa;
+  }
+}
+
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  background: #ef4444;
+  color: white;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 50%;
+  font-weight: 600;
+}
+
+/* ===== Profile Section ===== */
+.profile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.avatar {
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+  color: white;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+
+  .role {
+    font-weight: 500;
+  }
+
+  .status {
+    font-size: 12px;
+    color: #10b981;
+  }
+}
+
+/* ===== Dropdown Panels ===== */
+.notification-dropdown,
+.profile-dropdown {
+  position: absolute;
+  top: 60px;
+  right: 0;
+  background: white;
+  color: #111827;
+  width: 240px;
+  border-radius: 12px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  animation: fadeIn 0.2s ease;
+}
+
+.notification-dropdown {
+  right: 120px;
+}
+
+.dropdown-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: 0.2s ease;
+  font-size: 14px;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+}
+
+.logout {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+/* ===== Content Area ===== */
+.layout-container {
+  height: calc(100vh - var(--header-height));
+  min-height: 0;
+  overflow: hidden;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.layout-breadcrumb {
+  flex-shrink: 0;
+  padding: 2px 2px 0;
+}
+
+.page-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.page-content.no-padding {
+  overflow: hidden;
+}
+
+.page-content > *:not(router-outlet) {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.page-content > router-outlet {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .main-layout {
+    --header-height: 80px;
+  }
+
+  .top-header {
+    padding: 12px 16px;
+  }
+
+  .right {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-layout {
+    --header-height: 74px;
+  }
+
+  .layout-container {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .brand {
+    font-size: 16px;
+  }
+
+  .subtitle {
+    font-size: 11px;
+  }
+
+  .reminder-link {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+
+/* ===== Animation ===== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

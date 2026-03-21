@@ -1,0 +1,113 @@
+<section class="reminder-screen">
+  <div class="page-header">
+    <div>
+      <h2>Task and Enquiry Reminders</h2>
+      <p>Upcoming and overdue reminders for active tasks and new enquiries.</p>
+    </div>
+
+    <div class="header-actions">
+      <button
+        type="button"
+        class="refresh-button"
+        (click)="refreshNow()"
+        [disabled]="refreshing">
+        {{ refreshing ? 'Refreshing...' : 'Refresh Now' }}
+      </button>
+
+      <div class="meta-chip" *ngIf="lastUpdated">
+        Updated {{ lastUpdated | date:'dd/MM/yyyy HH:mm:ss' }}
+      </div>
+    </div>
+  </div>
+
+  <div class="filter-row" *ngIf="!loading && reminders.length > 0">
+    <button type="button" class="filter-chip" [class.active]="activeFilter === 'all'" (click)="setFilter('all')">
+      All <span>{{ getFilterCount('all') }}</span>
+    </button>
+    <button type="button" class="filter-chip" [class.active]="activeFilter === 'upcoming'" (click)="setFilter('upcoming')">
+      Upcoming <span>{{ getFilterCount('upcoming') }}</span>
+    </button>
+    <button type="button" class="filter-chip" [class.active]="activeFilter === 'overdue'" (click)="setFilter('overdue')">
+      Overdue <span>{{ getFilterCount('overdue') }}</span>
+    </button>
+    <button type="button" class="filter-chip" [class.active]="activeFilter === 'sent'" (click)="setFilter('sent')">
+      Sent <span>{{ getFilterCount('sent') }}</span>
+    </button>
+  </div>
+
+  <div class="state-card" *ngIf="loading">
+    Loading reminders...
+  </div>
+
+  <div class="state-card empty" *ngIf="!loading && reminders.length === 0">
+    No reminders scheduled right now.
+  </div>
+
+  <div class="state-card empty" *ngIf="!loading && reminders.length > 0 && filteredReminders.length === 0">
+    No reminders match the selected filter.
+  </div>
+
+  <div class="reminder-grid" *ngIf="!loading && filteredReminders.length > 0">
+    <article
+      class="reminder-card"
+      *ngFor="let reminder of filteredReminders; trackBy: trackByTaskId"
+      [class.overdue]="isOverdue(reminder)"
+      [class.enquiry-card]="isEnquiry(reminder)">
+      <div class="card-top">
+        <div class="card-title-block">
+          <h3>{{ reminder.taskName }}</h3>
+          <p>
+            {{ isEnquiry(reminder) ? 'Phone' : 'Assigned To' }}:
+            {{ reminder.assignedUser }}
+          </p>
+        </div>
+
+        <div class="card-top-right">
+          <span
+            class="status-badge"
+            [class.upcoming]="reminder.reminderStatus === 'upcoming'"
+            [class.sent]="reminder.reminderStatus === 'sent'"
+            [class.overdue]="reminder.reminderStatus === 'overdue'">
+            {{ getStatusLabel(reminder) }}
+          </span>
+
+          <div
+            class="card-actions"
+            *ngIf="isEnquiry(reminder)"
+            (click)="$event.stopPropagation()">
+            <button
+              type="button"
+              class="action-btn"
+              [class.active]="activeMenuId === reminder.taskId"
+              (click)="toggleMenu(reminder.taskId)">
+              <i class="fa-solid fa-ellipsis-vertical"></i>
+            </button>
+            <div class="action-dropdown" *ngIf="activeMenuId === reminder.taskId">
+              <button type="button" (click)="createTaskFromEnquiry(reminder)">
+                <i class="fa-solid fa-plus"></i> Create Task
+              </button>
+              <button type="button" class="danger" (click)="removeEnquiry(reminder)">
+                <i class="fa-solid fa-trash"></i> Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-row">
+        <span class="label">Reminder Time</span>
+        <strong>{{ reminder.reminderTime | date:'dd MMM yyyy, hh:mm a' }}</strong>
+      </div>
+
+      <div class="detail-row" *ngIf="!isEnquiry(reminder)">
+        <span class="label">Due Date</span>
+        <strong>{{ reminder.dueDate | date:'dd MMM yyyy, hh:mm a' }}</strong>
+      </div>
+
+      <div class="detail-row">
+        <span class="label">{{ isEnquiry(reminder) ? 'Enquiry Status' : 'Task Status' }}</span>
+        <span class="task-badge">{{ reminder.taskStatus }}</span>
+      </div>
+    </article>
+  </div>
+</section>

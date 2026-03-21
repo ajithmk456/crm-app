@@ -1,0 +1,149 @@
+<div class="group-wrapper">
+
+  <!-- HEADER -->
+  <div class="header">
+    <h2>Manage Groups</h2>
+    <p>Create, edit and organize customer groups</p>
+  </div>
+
+  <div class="group-layout">
+
+    <!-- ================= LEFT PANEL ================= -->
+    <div class="group-list-panel">
+
+      <div class="list-header">
+        <h3>Groups</h3>
+        <button class="btn-new" (click)="resetForm()">+ New</button>
+      </div>
+
+      <!-- SEARCH -->
+      <div class="search-box">
+        <input type="text"
+               placeholder="Search group..."
+               [(ngModel)]="searchText">
+      </div>
+
+      <!-- GROUP LIST -->
+      <div class="group-item"
+         *ngFor="let group of filteredGroups()"
+         [class.active]="isSelectedGroup(group)"
+         (click)="editGroup(group)">
+
+        <div class="group-info">
+          <h4>{{ group.name }}</h4>
+          <span class="member-badge">
+            {{ group.numbers?.length || group.contacts.length || 0 }}
+          </span>
+        </div>
+
+        <button class="delete-btn"
+          (click)="openDeleteModal(group); $event.stopPropagation()"
+          aria-label="Delete group">
+          ✕
+        </button>
+
+      </div>
+
+      <div *ngIf="filteredGroups().length === 0" class="empty-text">
+        No groups found
+      </div>
+
+    </div>
+
+    <!-- ================= RIGHT PANEL ================= -->
+    <div class="group-form-panel">
+
+      <div class="form-header">
+        <h3>
+          {{ editingIndex !== null ? 'Edit Group' : 'Create Group' }}
+        </h3>
+
+        <span *ngIf="editingIndex !== null" class="edit-badge">
+          Editing
+        </span>
+      </div>
+
+      <!-- Group Name -->
+      <div class="form-group">
+        <label>Group Name</label>
+        <input type="text"
+               placeholder="Enter group name"
+               [(ngModel)]="groupName">
+      </div>
+
+      <!-- Contact Numbers Input -->
+      <div class="form-group">
+        <label>Contact Numbers</label>
+        
+        <!-- Chip Input Field -->
+        <div class="chip-input-wrapper">
+          <input 
+            type="text"
+            placeholder="Enter number and press Enter or comma"
+            [(ngModel)]="contactInput"
+            (keydown)="handleContactInput($event)"
+            class="chip-input">
+          
+          <!-- Error Message -->
+          <span class="error-message" *ngIf="contactInputError">
+            {{ contactInputError }}
+          </span>
+        </div>
+
+        <!-- Number Chips -->
+        <div class="number-chip-container" *ngIf="numbers.length > 0">
+          <div class="number-chip" *ngFor="let num of numbers; let i = index">
+            <span class="chip-text">{{ num }}</span>
+            <button 
+              type="button"
+              class="chip-remove"
+              (click)="removeNumber(i)"
+              title="Remove number">
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div class="no-contacts-message" *ngIf="numbers.length === 0">
+          No numbers added yet
+        </div>
+      </div>
+
+      <!-- SAVE BUTTON -->
+      <div class="action-section">
+        <button class="btn-save"
+                [disabled]="!isFormValid || isSaving"
+                (click)="saveGroup()">
+          {{ isSaving ? 'Saving...' : (editingGroupId ? 'Update Group' : 'Save Group') }}
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ================= DELETE CONFIRM MODAL ================= -->
+
+<div class="modal-overlay" *ngIf="showDeleteModal">
+  <div class="confirm-modal">
+
+    <h3>Delete Group</h3>
+    <p>Are you sure you want to delete this group?</p>
+
+    <div class="modal-actions">
+      <button class="btn-cancel"
+              (click)="closeDeleteModal()">
+        Cancel
+      </button>
+
+      <button class="btn-delete"
+              (click)="confirmDelete()">
+        Delete
+      </button>
+    </div>
+
+  </div>
+</div>

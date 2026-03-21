@@ -1,0 +1,142 @@
+<div class="employee-wrapper">
+  <div class="dashboard-head">
+    <div>
+      <h2>Welcome, {{ currentUser.name }}</h2>
+      <p>Track deadlines, pick priorities, and finish work faster.</p>
+    </div>
+    <button type="button" class="refresh-btn" (click)="refreshTasks()" [disabled]="loading">
+      <i class="fa-solid fa-rotate-right"></i>
+      Refresh
+    </button>
+  </div>
+
+  <div class="stats-grid">
+    <button class="stat-card open" [class.active]="activeFilter === 'open'" (click)="setFilter('open')">
+      <div class="card-icon"><i class="fa-regular fa-folder-open"></i></div>
+      <div class="card-info">
+        <h3>{{ openTasksCount }}</h3>
+        <p>Open Tasks</p>
+      </div>
+    </button>
+
+    <button class="stat-card progress" [class.active]="activeFilter === 'in-progress'" (click)="setFilter('in-progress')">
+      <div class="card-icon"><i class="fa-solid fa-spinner"></i></div>
+      <div class="card-info">
+        <h3>{{ inProgressCount }}</h3>
+        <p>In Progress</p>
+      </div>
+    </button>
+
+    <button class="stat-card completed" [class.active]="activeFilter === 'completed'" (click)="setFilter('completed')">
+      <div class="card-icon"><i class="fa-solid fa-circle-check"></i></div>
+      <div class="card-info">
+        <h3>{{ completedCount }}</h3>
+        <p>Completed</p>
+      </div>
+    </button>
+
+    <button class="stat-card overdue" [class.active]="activeFilter === 'overdue'" (click)="setFilter('overdue')">
+      <div class="card-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <div class="card-info">
+        <h3>{{ overdueCount }}</h3>
+        <p>Overdue</p>
+      </div>
+    </button>
+  </div>
+
+  <div class="dashboard-grid">
+    <section class="task-panel">
+      <div class="panel-head">
+        <h3>My Tasks</h3>
+        <div class="filter-chip" [class.active]="activeFilter !== 'all'">
+          <i class="fa-solid fa-filter"></i>
+          {{ activeFilter === 'all' ? 'All' : activeFilter }}
+        </div>
+      </div>
+
+      <div *ngIf="loading" class="state-text">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        Loading tasks...
+      </div>
+
+      <div class="table-wrap" *ngIf="!loading && visibleTasks.length > 0">
+        <table>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Due Date</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th class="actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let task of visibleTasks" [class.overdue-row]="isOverdue(task)" [class.high-priority-row]="task.priority === 'High'">
+              <td>
+                <div class="task-name">{{ task.title }}</div>
+                <div class="task-desc">{{ task.description }}</div>
+              </td>
+              <td>
+                <span [class.overdue-text]="isOverdue(task)">{{ formatDate(task.dueDate) }}</span>
+              </td>
+              <td>
+                <span class="priority-badge" [ngClass]="task.priority.toLowerCase()">{{ task.priority }}</span>
+              </td>
+              <td>
+                <span class="status-badge" [ngClass]="statusClass(task.status)">{{ task.status }}</span>
+              </td>
+              <td class="actions-col">
+                <button
+                  class="btn-inline start"
+                  *ngIf="task.status === 'Pending'"
+                  (click)="startTask(task)"
+                  [disabled]="actionLoading.has(task._id || task.title)">
+                  <i class="fa-solid fa-play"></i>
+                  Start Task
+                </button>
+
+                <button
+                  class="btn-inline complete"
+                  *ngIf="task.status === 'In Progress'"
+                  (click)="markComplete(task)"
+                  [disabled]="actionLoading.has(task._id || task.title)">
+                  <i class="fa-solid fa-check"></i>
+                  Mark Complete
+                </button>
+
+                <span class="done-text" *ngIf="task.status === 'Completed'">
+                  <i class="fa-solid fa-circle-check"></i>
+                  Done
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div *ngIf="!loading && visibleTasks.length === 0" class="state-text">
+        No tasks found for this filter.
+      </div>
+    </section>
+
+    <aside class="quick-panel">
+      <h3>Quick Actions</h3>
+      <button type="button" class="quick-btn" (click)="setFilter('high-priority')">
+        <i class="fa-solid fa-bolt"></i>
+        View High Priority
+      </button>
+      <button type="button" class="quick-btn" (click)="setFilter('overdue')">
+        <i class="fa-solid fa-clock"></i>
+        View Overdue
+      </button>
+      <button type="button" class="quick-btn" (click)="clearFilter()">
+        <i class="fa-solid fa-list"></i>
+        Show All Tasks
+      </button>
+      <button type="button" class="quick-btn" (click)="goToReminders()">
+        <i class="fa-regular fa-bell"></i>
+        Task Reminders
+      </button>
+    </aside>
+  </div>
+</div>

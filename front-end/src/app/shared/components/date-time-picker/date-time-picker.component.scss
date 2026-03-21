@@ -1,0 +1,17 @@
+.date-time-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #d7dee7;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: #2b6ef2;
+    box-shadow: 0 0 0 3px rgba(43, 110, 242, 0.12);
+  }
+}

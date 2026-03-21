@@ -1,0 +1,205 @@
+<div class="employee-container"> <!-- Same container class -->
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <div>
+      <h2>{{ isAdmin ? 'Manage Tasks' : 'My Tasks' }}</h2>
+      <p>{{ isAdmin ? 'Create, assign, and manage tasks' : 'View and update your assigned tasks' }}</p>
+    </div>
+    <button *ngIf="isAdmin" class="btn-primary" (click)="openAddTask()">
+      + Add Task
+    </button>
+  </div>
+
+  <div *ngIf="message" class="message" [ngClass]="{ success: messageType === 'success', error: messageType === 'error' }" style="margin-bottom: 10px;">
+    {{ message }}
+  </div>
+  <div *ngIf="loading" style="margin-bottom: 10px;">Loading tasks...</div>
+
+  <!-- Filters -->
+  <div class="filters-row" [formGroup]="filterForm" style="display: flex; gap: 12px; align-items: flex-end; margin-bottom: 20px; flex-wrap: wrap;">
+    <input
+      type="text"
+      placeholder="Search task..."
+      formControlName="searchTerm"
+      style="flex: 1.5; min-width: 180px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; height: 40px; box-sizing: border-box;" />
+
+    <select
+      formControlName="statusFilter"
+      style="flex: 1; min-width: 140px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; height: 40px; box-sizing: border-box; background-color: white; cursor: pointer;">
+      <option>All Status</option>
+      <option>Pending</option>
+      <option>In Progress</option>
+      <option>Completed</option>
+    </select>
+
+    <app-date-time-picker
+      formControlName="fromDate"
+      placeholder="From date and time"
+      style="flex: 1.2; min-width: 160px;"></app-date-time-picker>
+
+    <app-date-time-picker
+      formControlName="toDate"
+      placeholder="To date and time"
+      style="flex: 1.2; min-width: 160px;"></app-date-time-picker>
+  </div>
+
+  <!-- Table -->
+  <div class="table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Task Name</th>
+          <th *ngIf="isAdmin">Assigned To</th>
+          <th>Customer</th>
+          <th>Priority</th>
+          <th>Status</th>
+          <th>Payment</th>
+          <th>Due Date</th>
+          <th *ngIf="isAdmin" class="text-center">Actions</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr *ngFor="let task of filteredTasks; let i = index">
+          <td>#TSK{{ i + 1 }}</td>
+          <td>{{ task.title }}</td>
+          <td *ngIf="isAdmin">{{ getAssignedUserName(task) }}</td>
+          <td>{{ getCustomerLabel(task) }}</td>
+          <td>
+            <span class="badge" [ngClass]="{
+              high: task.priority === 'High',
+              medium: task.priority === 'Medium',
+              low: task.priority === 'Low'
+            }">{{ task.priority }}</span>
+          </td>
+          <td>
+            <span class="badge" [ngClass]="{
+              pending: task.status === 'Pending',
+              inprogress: task.status === 'In Progress',
+              completed: task.status === 'Completed'
+            }">{{ task.status }}</span>
+          </td>
+          <td>
+            <span class="badge payment-badge" [ngClass]="task.paymentReceived ? 'payment-received' : 'payment-not-received'">
+              {{ task.paymentReceived ? 'Received' : 'Pending' }}
+            </span>
+          </td>
+          <td>{{ task.dueDate | date:'dd/MM/yyyy HH:mm' }}</td>
+          <td *ngIf="isAdmin" class="text-center">
+            <button class="btn-edit" (click)="openEditTask(task)">Edit</button>
+            <button class="btn-delete" (click)="deleteTask(task)">Delete</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Task Modal -->
+<div class="modal-overlay" *ngIf="isTaskModalOpen" (click)="closeTaskModal()">
+  <div class="employee-modal" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <h3>
+        {{ isEditMode ? 'Edit Task' : 'Add Task' }}
+      </h3>
+      <button class="close-btn" (click)="closeTaskModal()">X</button>
+    </div>
+
+    <div class="modal-body" [formGroup]="taskForm">
+
+      <div class="form-group">
+        <label>Task Title</label>
+        <input type="text" placeholder="Enter task title" formControlName="title" />
+      </div>
+
+      <div class="form-group">
+        <label>Description</label>
+        <textarea rows="3" placeholder="Enter description" formControlName="description"></textarea>
+      </div>
+
+      <div class="form-group" *ngIf="isAdmin">
+        <label>Assign To</label>
+        <select formControlName="assignedTo">
+          <option value="">Select employee</option>
+          <option *ngFor="let emp of employees" [value]="emp._id || emp.fullName">
+            {{ emp.fullName }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Customer Name</label>
+        <input type="text" placeholder="Enter customer name" formControlName="customerName" />
+      </div>
+
+      <div class="form-group">
+        <label>Customer Phone</label>
+        <input type="text" placeholder="Enter customer phone" formControlName="customerPhone" />
+      </div>
+
+      <div class="form-group switch-group">
+        <label>Payment Received</label>
+        <label class="switch">
+          <input type="checkbox" formControlName="paymentReceived" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label>Priority</label>
+        <select formControlName="priority">
+          <option value="Low">Low</option>
+          <option value="Medium">Medium</option>
+          <option value="High">High</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Status</label>
+        <select formControlName="status">
+          <option value="Pending">Pending</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Completed">Completed</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Due Date & Time</label>
+        <div class="date-time-row">
+          <app-date-time-picker formControlName="dueDate" [defaultToCurrentTime]="true" placeholder="Select due date and time"></app-date-time-picker>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Enable Reminder</label>
+
+        <label class="switch">
+          <input type="checkbox" formControlName="reminderEnabled" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="form-group" *ngIf="reminderEnabled">
+        <label>Reminder Before</label>
+        <select formControlName="reminderBefore">
+          <option *ngFor="let option of reminderOptions" [ngValue]="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+      </div>
+
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-cancel" (click)="closeTaskModal()">Cancel</button>
+      <button class="btn-save" (click)="saveTask()" [disabled]="loadingSave">
+        {{ isEditMode ? 'Update Task' : 'Save Task' }}
+      </button>
+    </div>
+
+  </div>
+</div>

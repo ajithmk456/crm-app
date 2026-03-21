@@ -1,0 +1,57 @@
+<div class="main-layout">
+
+  <header class="top-header">
+
+    <div class="left">
+      <div class="brand">MUKUNDHA ASSOCIATES</div>
+      <div class="subtitle">{{ dashboardSubtitle }}</div>
+    </div>
+
+  <div class="right">
+
+  <button
+    *ngIf="isAdmin"
+    type="button"
+    class="reminder-link"
+    [class.active]="isReminderRoute"
+    (click)="goToReminders()">
+    <i class="fa-regular fa-clock"></i>
+    <span>Task Reminders</span>
+  </button>
+
+  <!-- Profile -->
+  <div class="profile" (click)="toggleDropdown()">
+
+    <div class="avatar">{{ userInitials }}</div>
+
+    <div class="user-info">
+      <div class="role">{{ currentUser?.name || 'Admin' }}</div>
+      <div class="status">Online</div>
+    </div>
+
+    <i class="fa-solid fa-chevron-down"></i>
+
+    <div class="profile-dropdown" *ngIf="showDropdown" (click)="$event.stopPropagation()">
+      <div class="dropdown-item" (click)="goToProfile()"><i class="fa-regular fa-user" style="margin-right:8px;"></i>My Profile</div>
+      <div class="dropdown-item logout" (click)="logout()"><i class="fa-solid fa-right-from-bracket" style="margin-right:8px;"></i>Logout</div>
+    </div>
+
+  </div>
+
+</div>
+
+
+  </header>
+
+  <div class="layout-container">
+    <app-breadcrumb class="layout-breadcrumb"></app-breadcrumb>
+
+    <div
+      class="page-content"
+      [ngClass]="{ 'no-padding': isChatRoute }">
+      <router-outlet></router-outlet>
+    </div>
+  </div>
+
+
+</div>

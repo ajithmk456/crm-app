@@ -1,0 +1,253 @@
+<div class="chat-page">
+
+  <div class="whatsapp-layout">
+
+    <!-- ========================= -->
+    <!-- SIDEBAR -->
+    <!-- ========================= -->
+    <div class="whatsapp-sidebar">
+
+      <div class="sidebar-topbar">
+        <div>
+          <h2>Customer Chats</h2>
+          <p>Customer requirements from recent conversations</p>
+        </div>
+        <button type="button" class="icon-button">
+          <i class="fa-solid fa-pen-to-square"></i>
+        </button>
+      </div>
+
+      <div class="sidebar-search">
+        <div class="search-wrapper">
+          <i class="fas fa-search"></i>
+          <input type="text" placeholder="Search customers or phone" [(ngModel)]="searchTerm">
+          <button type="button" class="search-clear" *ngIf="searchTerm" (click)="clearSearch()" aria-label="Clear search">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="sidebar-list">
+
+        <div
+          class="chat-item"
+          *ngFor="let contact of filteredContacts; trackBy: trackByContact"
+          [class.active]="selectedChat.id === contact.id"
+          (click)="selectChat(contact)">
+          <div class="chat-avatar chat-avatar-sidebar" [class.alt]="selectedChat.id !== contact.id">{{ contact.avatar }}</div>
+          <div class="chat-details">
+            <div class="chat-row">
+              <div class="chat-name">{{ contact.name }}</div>
+              <div class="chat-time">{{ contact.lastMessageTime }}</div>
+            </div>
+            <div class="chat-row">
+              <div class="chat-preview">{{ contact.preview }}</div>
+              <div class="chat-indicators">
+                <span class="task-count-badge" *ngIf="contact.taskCount > 0">
+                  {{ contact.openTaskCount }}/{{ contact.taskCount }} tasks
+                </span>
+                <span class="unread-badge" *ngIf="contact.unreadCount > 0">{{ contact.unreadCount }}</span>
+                <span class="chat-status-dot" *ngIf="contact.unreadCount === 0 && contact.taskCount === 0"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-empty" *ngIf="filteredContacts.length === 0">
+          No chats match your search.
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ========================= -->
+    <!-- CHAT AREA -->
+    <!-- ========================= -->
+    <div class="whatsapp-chat">
+
+      <!-- HEADER -->
+      <div class="chat-header">
+        <div class="chat-user">
+          <div class="chat-avatar big chat-avatar-header">{{ selectedChat.avatar }}</div>
+          <div class="chat-user-meta">
+            <div class="chat-title">{{ selectedChat.name }}</div>
+            <div class="chat-sub">
+              <span class="presence-dot"></span>
+              {{ selectedChat.phone }}
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-actions">
+          <button class="btn-outline" (click)="toggleTaskPanel()">
+            <i class="fa-regular fa-rectangle-list"></i>
+            <span>View Tasks</span>
+          </button>
+          <button class="btn-primary" *ngIf="isAdmin" (click)="openTaskModal()">
+            <i class="fa-solid fa-plus"></i>
+            <span>Create Task</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- TASK PANEL -->
+      <div class="task-panel" *ngIf="showTasks">
+        <div class="task-panel-state" *ngIf="loadingTasks">Loading tasks...</div>
+        <div class="task-panel-state" *ngIf="!loadingTasks && tasks.length === 0">No tasks created from this customer conversation yet.</div>
+        <div class="task-item" *ngFor="let t of tasks">
+          <div class="task-copy">
+            <div class="task-title">{{ t.title }}</div>
+            <div class="task-meta">
+              {{ t.priority }} • {{ t.status }}
+              <span *ngIf="t.customerPhone"> • {{ t.customerPhone }}</span>
+            </div>
+          </div>
+          <span class="task-status">{{ getTaskSummary(t) }}</span>
+        </div>
+      </div>
+
+      <!-- MESSAGES -->
+      <div class="chat-messages" #messageContainer>
+
+        <div class="date-separator">Today</div>
+
+        <div
+          class="message"
+          *ngFor="let message of messages; trackBy: trackByMessage"
+          [class.incoming]="message.sender === 'incoming'"
+          [class.outgoing]="message.sender === 'outgoing'"
+          [class.selected]="selectedMessageId === message.id"
+          (click)="selectMessage(message)">
+          <div class="bubble">
+            <button
+              type="button"
+              class="message-action"
+              *ngIf="isAdmin"
+              (click)="openTaskModal(message); $event.stopPropagation()">
+              Create Task
+            </button>
+            <div class="bubble-text">{{ message.text }}</div>
+            <div class="msg-meta">
+              <span class="msg-time">{{ message.time }}</span>
+              <span class="ticks" [class.read]="message.read" *ngIf="message.sender === 'outgoing'" aria-label="Read">✓✓</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- INPUT -->
+      <div class="chat-input">
+        <button type="button" class="chat-input-icon">
+          <i class="fa-regular fa-face-smile"></i>
+        </button>
+        <div class="chat-input-shell">
+          <input #messageInput type="text" placeholder="Type a message" (keyup.enter)="sendMessage(messageInput)">
+        </div>
+        <button class="btn-primary send-btn" (click)="sendMessage(messageInput)">
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+
+<!-- =========================
+     ADD TASK MODAL
+========================= -->
+
+<div class="modal-overlay" *ngIf="isTaskModalOpen && isAdmin" (click)="closeTaskModal()">
+  <div class="employee-modal" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <h3>
+        {{ isEditMode ? 'Edit Task' : 'Add Task' }}
+      </h3>
+      <button class="close-btn" (click)="closeTaskModal()">✖</button>
+    </div>
+
+    <div class="modal-body" [formGroup]="taskForm">
+
+      <div class="form-group">
+        <label>Task Title</label>
+        <input type="text" placeholder="Enter task title" formControlName="title">
+      </div>
+
+      <div class="form-group">
+        <label>Description</label>
+        <textarea rows="3" placeholder="Enter description" formControlName="description"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Customer Context</label>
+        <input type="text" [value]="selectedChat.name + ' • ' + selectedChat.phone" readonly>
+      </div>
+
+      <div class="form-group">
+        <label>Assign To Employee</label>
+        <select formControlName="assignedTo">
+          <option value="">Select employee</option>
+          <option *ngFor="let employee of employees" [value]="employee._id || employee.fullName">{{ employee.fullName }}</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Priority</label>
+        <select formControlName="priority">
+          <option value="Low">Low</option>
+          <option value="Medium">Medium</option>
+          <option value="High">High</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Status</label>
+        <select formControlName="status">
+          <option value="Pending">Pending</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Completed">Completed</option>
+        </select>
+      </div>
+
+    <div class="form-group">
+  <label>Due Date & Time</label>
+
+  <div class="date-time-row">
+    <app-date-time-picker formControlName="dueDate" [defaultToCurrentTime]="true" placeholder="Select due date and time"></app-date-time-picker>
+  </div>
+
+</div>
+
+
+<div class="form-group">
+  <label>Enable Reminder</label>
+
+  <label class="switch">
+    <input type="checkbox" formControlName="reminderEnabled">
+    <span class="slider"></span>
+  </label>
+</div>
+
+
+      <div class="form-group" *ngIf="reminderEnabled">
+        <label>Reminder Before</label>
+        <select formControlName="reminderBefore">
+          <option *ngFor="let option of reminderOptions" [ngValue]="option.value">{{ option.label }}</option>
+        </select>
+      </div>
+
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-cancel" (click)="closeTaskModal()">Cancel</button>
+      <button class="btn-save" (click)="saveTask()" [disabled]="loadingSave">
+        {{ isEditMode ? 'Update Task' : 'Save Task' }}
+      </button>
+    </div>
+
+  </div>
+</div>

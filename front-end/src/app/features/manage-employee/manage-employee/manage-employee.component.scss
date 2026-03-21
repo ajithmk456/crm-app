@@ -1,0 +1,489 @@
+@import '../../../shared/styles/variables';
+
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.employee-container {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+  overflow: hidden;
+  padding: $spacing-lg;
+  background: $bg-page;
+}
+
+/* Header */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-xl;
+
+  h2 {
+    margin: 0;
+    font-size: $font-size-4xl;
+    font-weight: $font-weight-semibold;
+    color: $text-dark;
+  }
+
+  p {
+    margin: $spacing-sm 0 0;
+    color: $text-muted;
+  }
+}
+
+/* Primary Button */
+.btn-primary {
+  background: linear-gradient(135deg, $primary, $primary-dark);
+  color: $text-white;
+  border: none;
+  padding: $spacing-md $spacing-lg;
+  border-radius: $radius-md;
+  cursor: pointer;
+  font-weight: $font-weight-semibold;
+  transition: all $transition-base;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: $shadow-lg;
+  }
+}
+
+/* Action Bar */
+.action-bar {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: $spacing-xl;
+
+  input,
+  select {
+    padding: $spacing-md $spacing-lg;
+    border-radius: $radius-md;
+    border: 2px solid $border-color;
+    outline: none;
+    transition: all $transition-base;
+
+    &:focus {
+      border-color: $primary;
+      box-shadow: $shadow-focus;
+    }
+  }
+}
+
+/* Table Card */
+.table-card {
+  background: $bg-card;
+  border-radius: $radius-lg;
+  padding: $spacing-lg;
+  box-shadow: $shadow-lg;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th {
+    text-align: left;
+    padding: $spacing-md;
+    font-weight: $font-weight-semibold;
+    background: rgba(37, 99, 235, 0.05);
+    color: $text-dark;
+    border-bottom: 2px solid $border-color;
+  }
+
+  td {
+    padding: $spacing-md;
+    border-bottom: 1px solid $border-subtle;
+    color: $text-secondary;
+  }
+
+  tr:hover {
+    background: $bg-light;
+  }
+}
+
+/* Badges */
+.badge {
+  padding: $spacing-sm $spacing-md;
+  border-radius: $radius-full;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.active {
+  background: $success-light;
+  color: $success;
+}
+
+.inactive {
+  background: #fdecea;
+  color: $danger;
+}
+
+/* Action Buttons */
+.btn-edit {
+  background: rgba(37, 99, 235, 0.1);
+  border: none;
+  color: $primary;
+  padding: $spacing-sm $spacing-md;
+  border-radius: $radius-md;
+  margin-right: $spacing-sm;
+  cursor: pointer;
+  font-weight: $font-weight-semibold;
+  transition: all $transition-base;
+
+  &:hover {
+    background: rgba(37, 99, 235, 0.2);
+  }
+}
+
+.btn-delete {
+  background: #fdecea;
+  border: none;
+  color: $danger;
+  padding: $spacing-sm $spacing-md;
+  border-radius: $radius-md;
+  cursor: pointer;
+  font-weight: $font-weight-semibold;
+  transition: all $transition-base;
+
+  &:hover {
+    background: #fbd4d0;
+  }
+}
+
+/* Pagination */
+.pagination {
+  margin-top: 0;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: $spacing-lg;
+
+  button {
+    padding: $spacing-sm $spacing-md;
+    border-radius: $radius-md;
+    border: 1px solid $border-color;
+    background: $bg-white;
+    cursor: pointer;
+    transition: all $transition-base;
+    color: $text-secondary;
+    font-weight: $font-weight-semibold;
+
+    &:hover {
+      border-color: $primary;
+      color: $primary;
+    }
+
+    &.active {
+      background: $primary;
+      color: $text-white;
+      border-color: $primary;
+    }
+  }
+}
+
+.filters-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0;
+}
+
+.left-filters {
+  display: flex;
+  gap: $spacing-lg;
+
+  input,
+  select {
+    padding: $spacing-md $spacing-lg;
+    border-radius: $radius-md;
+    border: 2px solid $border-color;
+    outline: none;
+    min-width: 220px;
+    background: $bg-white;
+    color: $text-dark;
+    transition: all $transition-base;
+
+    &:focus {
+      border-color: $primary;
+      box-shadow: $shadow-focus;
+    }
+  }
+}
+
+table th {
+  font-size: 14px;
+  letter-spacing: 0.5px;
+}
+
+table tr {
+  transition: 0.2s ease;
+}
+
+table tr:hover {
+  background: #f1f6ff;
+}
+
+@media (max-width: 900px) {
+  .left-filters {
+    width: 100%;
+    flex-wrap: wrap;
+
+    input,
+    select {
+      min-width: 160px;
+      flex: 1;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .employee-container {
+    padding: 12px;
+  }
+
+  .page-header {
+    margin-bottom: 0;
+  }
+
+  .btn-primary {
+    width: 100%;
+  }
+
+  .pagination {
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+  }
+}
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;                 /* Cleaner than top/left */
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;            /* Prevent cut-off on small screens */
+  z-index: 1000;
+}
+
+/* Modal Box */
+.employee-modal {
+  width: 520px;
+  max-height: 90vh;           /* Prevent overflow */
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Header */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 22px;
+  border-bottom: 1px solid #eee;
+
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+
+    i {
+      margin-right: 8px;
+      color: #2b6ef2;
+    }
+  }
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* Body */
+.modal-body {
+   padding: 22px;
+  overflow-y: auto;     /* Enables scroll */
+  max-height: 65vh;     /* Keeps header/footer fixed */
+}
+
+.form-group {
+  margin-bottom: 18px;
+
+  label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+}
+
+.input-with-icon {
+  position: relative;
+
+  i {
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    transform: translateY(-50%);
+    color: #999;
+  }
+
+  input,
+  select {
+    width: 100%;
+    padding: 10px 12px 10px 36px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    outline: none;
+    background: #f9fafc;
+  }
+
+  input:focus,
+  select:focus {
+    border-color: #2b6ef2;
+    background: #fff;
+  }
+}
+
+/* Toggle Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 22px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.3s;
+  border-radius: 20px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.switch input:checked + .slider {
+  background-color: #2b6ef2;
+}
+
+.switch input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+/* Footer */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 22px;
+  border-top: 1px solid #eee;
+}
+
+.btn-cancel {
+  background: #f1f1f1;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-save {
+  background: linear-gradient(135deg, #2b6ef2, #1d4ed8);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+textarea {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  outline: none;
+  background: #f9fafc;
+  resize: none;
+  min-height: 70px;
+}
+
+textarea:focus {
+  border-color: #2b6ef2;
+  background: #fff;
+}
+
+.delete-modal {
+  width: 400px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 30px 25px;
+  text-align: center;
+  box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+  animation: fadeIn 0.3s ease;
+}
+
+.delete-icon {
+  font-size: 40px;
+  color: #dc3545;
+  margin-bottom: 15px;
+}
+
+.delete-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+.btn-confirm {
+  background: #dc3545;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}

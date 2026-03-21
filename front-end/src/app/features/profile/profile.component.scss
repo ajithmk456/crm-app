@@ -1,0 +1,240 @@
+.profile-page {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px;
+}
+
+/* ===== Card ===== */
+.profile-card {
+  width: 100%;
+  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  height: min(100%, calc(100vh - var(--header-height, 86px) - 88px));
+  min-height: 0;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.09);
+  overflow: hidden;
+}
+
+/* ===== Card Header ===== */
+.card-header {
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  color: #fff;
+  text-align: center;
+  padding: 20px 24px 16px;
+  flex-shrink: 0;
+
+  .avatar-circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 10px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.3);
+  }
+
+  h2 {
+    margin: 0 0 4px;
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: #f8fbff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  .email-text {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: rgba(241, 245, 249, 0.92);
+  }
+
+  .role-badge {
+    display: inline-block;
+    background: rgba(59, 130, 246, 0.24);
+    border: 1px solid rgba(147, 197, 253, 0.75);
+    color: #dbeafe;
+    padding: 4px 16px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: capitalize;
+    letter-spacing: 0.5px;
+  }
+}
+
+/* ===== Card Body ===== */
+.card-body {
+  padding: 16px 20px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.profile-form {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* ===== Section titles ===== */
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.section-gap {
+  margin-top: 8px;
+}
+
+.section-hint {
+  font-size: 13px;
+  color: #9ca3af;
+  margin: -2px 0 12px;
+}
+
+/* ===== Form ===== */
+.form-group {
+  margin-bottom: 10px;
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 7px;
+  }
+
+  input {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid #dde1e7;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #1f2937;
+    background: #fff;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    outline: none;
+
+    &:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    &.field-readonly {
+      background: #f9fafb;
+      color: #6b7280;
+      cursor: not-allowed;
+    }
+
+    &.field-invalid {
+      border-color: #ef4444;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
+    }
+  }
+}
+
+.field-error {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* ===== Actions ===== */
+.form-actions {
+  margin-top: auto;
+  padding-top: 14px;
+  background: linear-gradient(to top, #ffffff 75%, rgba(255, 255, 255, 0));
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #2b6ef2, #1d4ed8);
+  color: #fff;
+  border: none;
+  padding: 11px 26px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.2s ease;
+
+  i {
+    font-size: 15px;
+  }
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    opacity: 0.92;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-page {
+    padding: 8px;
+  }
+
+  .profile-card {
+    height: 100%;
+    max-width: 100%;
+  }
+
+  .card-header {
+    padding: 14px 14px 12px;
+  }
+
+  .card-body {
+    padding: 12px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .btn-save {
+    width: 100%;
+    justify-content: center;
+  }
+}

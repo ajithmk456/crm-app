@@ -1,0 +1,46 @@
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.breadcrumb-item {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s ease;
+
+  &:hover:not(:disabled) {
+    color: #2563eb;
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &.current {
+    color: #0f172a;
+    font-weight: 600;
+  }
+}
+
+.separator {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .breadcrumb {
+    gap: 6px;
+    font-size: 12px;
+  }
+}

@@ -1,0 +1,37 @@
+@import '../../../shared/styles/variables';
+
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.employee-container {
+  min-height: 0;
+}
+
+.high {
+  background: #fdecea;
+  color: $danger;
+}
+
+.pending {
+  background: #fef3c7;
+  color: $warning;
+}
+
+.payment-badge.payment-received {
+  background: rgba(16, 185, 129, 0.14);
+  color: $success;
+}
+
+.payment-badge.payment-not-received {
+  background: rgba(239, 68, 68, 0.14);
+  color: $danger;
+}
+
+.switch-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
