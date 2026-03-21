@@ -46,7 +46,8 @@ Notes:
 
 - The build output folder is `dist/front-end`.
 - Routing is configured with hashes, so URLs will look like `/#/manage-task` and will work on GitHub Pages.
-- This workspace is not currently a git repository, so initialize git and push the project to GitHub before running the deploy command.
+- Production builds use the repo base path `/crm-app/`.
+- Update `src/environments/environment.prod.ts` with your deployed backend URL before publishing, for example `https://your-api-host.com`.
 
 ## Running unit tests
 
