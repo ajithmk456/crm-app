@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiBaseUrl: 'https://YOUR_RENDER_APP_NAME.onrender.com'
+  apiBaseUrl: 'https://crm-backend-6u38.onrender.com'
 };
