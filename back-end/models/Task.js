@@ -1,0 +1,23 @@
+const mongoose = require('mongoose');
+
+const taskSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: [true, 'Task title is required'] },
+    description: { type: String, default: '' },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+    customerName: { type: String, default: '' },
+    customerPhone: { type: String, default: '' },
+    paymentReceived: { type: Boolean, default: false },
+    priority: { type: String, enum: ['Low', 'Medium', 'High'], default: 'Medium' },
+    status: { type: String, enum: ['Pending', 'In Progress', 'Completed'], default: 'Pending' },
+    dueDate: { type: Date },
+    reminderEnabled: { type: Boolean, default: false },
+    reminderBefore: { type: Number, default: 15, description: 'Minutes before due date to send reminder' },
+    reminderTime: { type: Date, description: 'Calculated reminder trigger time' },
+    reminderSent: { type: Boolean, default: false },
+    reminderScheduleId: { type: String, description: 'ID of scheduled cron job for cleanup' },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model('Task', taskSchema);
