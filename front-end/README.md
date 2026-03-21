@@ -44,7 +44,8 @@ npm run deploy:gh-pages
 
 Notes:
 
-- The build output folder is `dist/front-end`.
+- Angular 17 application builds place browser assets in `dist/front-end/browser`.
+- The GitHub Pages deploy step must publish `dist/front-end/browser`, not `dist/front-end`.
 - Routing is configured with hashes, so URLs will look like `/#/manage-task` and will work on GitHub Pages.
 - Production builds use the repo base path `/crm-app/`.
 - Update `src/environments/environment.prod.ts` with your deployed backend URL before publishing, for example `https://your-api-host.com`.
