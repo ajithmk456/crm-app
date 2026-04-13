@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiBaseUrl: 'https://crm-backend-6u38.onrender.com'
+  apiBaseUrl: 'http://rqfj1jn6r1samcr4j4e3cpkq.103.14.123.243.sslip.io'
 };
