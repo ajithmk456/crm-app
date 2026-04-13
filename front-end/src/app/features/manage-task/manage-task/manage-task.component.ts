@@ -53,6 +53,7 @@ export class ManageTaskComponent {
     this.filterForm = this.fb.group({
       searchTerm: [''],
       statusFilter: ['All Status'],
+      employeeFilter: ['All Employees'],
       fromDate: [''],
       toDate: ['']
     });
@@ -64,6 +65,7 @@ export class ManageTaskComponent {
       customerName: [''],
       customerPhone: [''],
       paymentReceived: [false],
+      reportSent: [false],
       priority: ['Medium'],
       status: ['Pending'],
       dueDate: [new Date().toISOString()],
@@ -130,6 +132,7 @@ export class ManageTaskComponent {
   applyFilters() {
     const searchTerm = (this.filterForm.get('searchTerm')?.value || '').toLowerCase();
     const statusFilter = this.filterForm.get('statusFilter')?.value || 'All Status';
+    const employeeFilter = this.filterForm.get('employeeFilter')?.value || 'All Employees';
     const fromDateStr = this.filterForm.get('fromDate')?.value;
     const toDateStr = this.filterForm.get('toDate')?.value;
 
@@ -158,9 +161,14 @@ export class ManageTaskComponent {
       const matchesFromDate = !fromDate || taskDueDate >= fromDate;
       const matchesToDate = !toDate || taskDueDate <= toDate;
 
+      const assignedId = typeof task.assignedTo === 'string' ? task.assignedTo : task.assignedTo?._id || '';
+      const matchesEmployeeFilter = this.isAdmin
+        ? employeeFilter === 'All Employees' || assignedId === employeeFilter
+        : true;
+
       const matchesEmployee = this.isAdmin ? true : this.isTaskAssignedToUser(task);
 
-      return matchesSearch && matchesStatus && matchesFromDate && matchesToDate && matchesEmployee;
+      return matchesSearch && matchesStatus && matchesFromDate && matchesToDate && matchesEmployeeFilter && matchesEmployee;
     });
   }
 
@@ -189,6 +197,7 @@ export class ManageTaskComponent {
       customerName: '',
       customerPhone: '',
       paymentReceived: false,
+      reportSent: false,
       priority: 'Medium',
       status: 'Pending',
       dueDate: new Date().toISOString(),
@@ -208,6 +217,7 @@ export class ManageTaskComponent {
       customerName: task.customerName || '',
       customerPhone: task.customerPhone || '',
       paymentReceived: !!task.paymentReceived,
+      reportSent: !!task.reportSent,
       priority: task.priority,
       status: task.status,
       dueDate: task.dueDate,
@@ -229,6 +239,12 @@ export class ManageTaskComponent {
       return;
     }
 
+    const nextReportSent = formValue.status === 'Report Sent' ? true : !!formValue.reportSent;
+    if (formValue.status === 'Completed' && !nextReportSent) {
+      this.showMessage('Mark report as sent before completing the task', 'error');
+      return;
+    }
+
     this.loadingSave = true;
     const payload: Task = {
       title: formValue.title,
@@ -237,6 +253,7 @@ export class ManageTaskComponent {
       customerName: formValue.customerName || '',
       customerPhone: formValue.customerPhone || '',
       paymentReceived: !!formValue.paymentReceived,
+      reportSent: nextReportSent,
       priority: formValue.priority,
       status: formValue.status,
       dueDate: formValue.dueDate,
@@ -258,6 +275,7 @@ export class ManageTaskComponent {
                 ...item,
                 ...(updatedTask || {}),
                 paymentReceived: !!formValue.paymentReceived,
+                reportSent: nextReportSent,
               };
             });
             this.applyFilters();
@@ -340,5 +358,9 @@ export class ManageTaskComponent {
 
   get reminderEnabled(): boolean {
     return !!this.taskForm.get('reminderEnabled')?.value;
+  }
+
+  get reportSentSelected(): boolean {
+    return !!this.taskForm.get('reportSent')?.value || this.taskForm.get('status')?.value === 'Report Sent';
   }
 }

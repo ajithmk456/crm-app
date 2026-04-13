@@ -1,0 +1,199 @@
+const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
+
+const normalizePhoneNumber = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  return String(value).replace(/^whatsapp:/i, '').trim();
+};
+
+const normalizeStatus = (status) => {
+  switch (String(status || '').toLowerCase()) {
+    case 'read':
+      return 'read';
+    case 'delivered':
+      return 'delivered';
+    default:
+      return 'sent';
+  }
+};
+
+const parseMetaEvent = (body) => {
+  const entry = body?.entry?.[0];
+  const change = entry?.changes?.[0]?.value;
+  const metadata = change?.metadata || {};
+
+  if (!change) {
+    return [];
+  }
+
+  const incomingMessages = (change.messages || []).map((message) => ({
+    source: 'meta',
+    eventType: 'message',
+    messageId: message.id,
+    from: normalizePhoneNumber(message.from),
+    to: normalizePhoneNumber(metadata.display_phone_number || metadata.phone_number_id),
+    text: message.text?.body || message.button?.text || message.interactive?.button_reply?.title || '',
+    type: message.type || 'text',
+    direction: 'incoming',
+    status: 'sent',
+    timestamp: message.timestamp ? new Date(Number(message.timestamp) * 1000) : new Date(),
+    replyTo: message.context?.id,
+    conversationPhone: normalizePhoneNumber(message.from),
+  }));
+
+  const statusEvents = (change.statuses || []).map((status) => ({
+    source: 'meta',
+    eventType: 'status',
+    messageId: status.id,
+    from: normalizePhoneNumber(metadata.display_phone_number || metadata.phone_number_id),
+    to: normalizePhoneNumber(status.recipient_id),
+    text: '',
+    type: 'text',
+    direction: 'outgoing',
+    status: normalizeStatus(status.status),
+    timestamp: status.timestamp ? new Date(Number(status.timestamp) * 1000) : new Date(),
+    replyTo: undefined,
+    conversationPhone: normalizePhoneNumber(status.recipient_id),
+  }));
+
+  return [...incomingMessages, ...statusEvents].filter((event) => event.messageId && event.conversationPhone);
+};
+
+const parseTwilioEvent = (body) => {
+  const messageId = body.MessageSid || body.SmsMessageSid;
+  if (!messageId) {
+    return [];
+  }
+
+  const from = normalizePhoneNumber(body.From || body.WaId);
+  const to = normalizePhoneNumber(body.To);
+  const direction = String(body.Direction || '').toLowerCase().includes('inbound') ? 'incoming' : 'outgoing';
+  const phoneNumber = direction === 'incoming' ? from : to;
+
+  return [
+    {
+      source: 'twilio',
+      eventType: 'message',
+      messageId,
+      from,
+      to,
+      text: body.Body || '',
+      type: body.NumMedia && Number(body.NumMedia) > 0 ? 'media' : 'text',
+      direction,
+      status: normalizeStatus(body.MessageStatus || (direction === 'incoming' ? 'sent' : 'sent')),
+      timestamp: new Date(),
+      replyTo: undefined,
+      conversationPhone: phoneNumber,
+    },
+  ].filter((event) => event.from && event.to && event.conversationPhone);
+};
+
+const parseWhatsAppPayload = (body) => {
+  if (body?.entry?.length) {
+    return parseMetaEvent(body);
+  }
+
+  if (body?.MessageSid || body?.SmsMessageSid) {
+    return parseTwilioEvent(body);
+  }
+
+  return [];
+};
+
+exports.verifyWebhook = async (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (!mode || !token) {
+    return res.sendStatus(400);
+  }
+
+  if (mode === 'subscribe' && token === process.env.META_WEBHOOK_VERIFY_TOKEN) {
+    return res.status(200).send(challenge);
+  }
+
+  return res.sendStatus(403);
+};
+
+const persistWebhookEvent = async (event) => {
+  const existingConversation = await Conversation.findOne({ phoneNumber: event.conversationPhone });
+  const conversation = await Conversation.findOneAndUpdate(
+    { phoneNumber: event.conversationPhone },
+    {
+      $set: {
+        lastMessage: event.text || existingConversation?.lastMessage || '',
+        updatedAt: event.timestamp || new Date(),
+      },
+      $setOnInsert: {
+        phoneNumber: event.conversationPhone,
+        createdAt: event.timestamp || new Date(),
+      },
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+      timestamps: false,
+    }
+  );
+
+  const existingMessage = await Message.findOne({ messageId: event.messageId });
+  if (existingMessage) {
+    existingMessage.status = event.status;
+    existingMessage.timestamp = event.timestamp || existingMessage.timestamp;
+    if (event.text) {
+      existingMessage.text = event.text;
+    }
+    if (event.replyTo) {
+      existingMessage.replyTo = event.replyTo;
+    }
+    existingMessage.conversationId = conversation._id;
+    await existingMessage.save();
+    return { message: existingMessage, isNew: false };
+  }
+
+  const message = await Message.create({
+    messageId: event.messageId,
+    conversationId: conversation._id,
+    from: event.from,
+    to: event.to,
+    text: event.text || '',
+    type: event.type || 'text',
+    direction: event.direction,
+    status: event.status,
+    timestamp: event.timestamp || new Date(),
+    replyTo: event.replyTo,
+  });
+
+  return { message, isNew: true };
+};
+
+exports.handleWebhook = async (req, res, next) => {
+  try {
+    const events = parseWhatsAppPayload(req.body);
+
+    if (!events.length) {
+      return res.status(200).json({ success: true, message: 'Webhook received with no actionable events.' });
+    }
+
+    const results = [];
+    for (const event of events) {
+      results.push(await persistWebhookEvent(event));
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        processed: results.length,
+        created: results.filter((item) => item.isNew).length,
+        updated: results.filter((item) => !item.isNew).length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -1,9 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Group, GroupService } from '../manage-group/group.service';
 import { ToastrService } from 'ngx-toastr';
-
+import { BulkMessageService, MessageChannel, SendBulkMessagePayload } from './bulk-message.service';
 @Component({
   selector: 'app-manage-bulk-message',
   standalone: true,
@@ -11,25 +11,22 @@ import { ToastrService } from 'ngx-toastr';
   templateUrl: './manage-bulk-message.component.html',
   styleUrl: './manage-bulk-message.component.scss'
 })
-export class ManageBulkMessageComponent implements OnInit, OnDestroy {
+export class ManageBulkMessageComponent implements OnInit {
   groups: Group[] = [];
   selectedGroup: Group | null = null;
   messageText = '';
-  selectedFile: File | null = null;
-  imagePreviewUrl: string | null = null;
+  selectedChannel: MessageChannel = 'sms';
   isLoadingGroups = false;
+  isSending = false;
 
   constructor(
     private readonly groupService: GroupService,
-    private readonly toastr: ToastrService
+    private readonly toastr: ToastrService,
+    private readonly bulkMessageService: BulkMessageService,
   ) {}
 
   ngOnInit(): void {
     this.loadGroups();
-  }
-
-  ngOnDestroy(): void {
-    this.clearPreviewUrl();
   }
 
   get hasGroups(): boolean {
@@ -73,48 +70,43 @@ export class ManageBulkMessageComponent implements OnInit, OnDestroy {
   }
 
   onGroupChange(): void {
-    console.log('Selected group:', this.selectedGroup);
-  }
-
-  onFileSelect(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0] || null;
-    this.selectedFile = file;
-    this.clearPreviewUrl();
-
-    if (!file) {
-      return;
-    }
-
-    if (!file.type.startsWith('image/')) {
-      this.selectedFile = null;
-      input.value = '';
-      this.toastr.error('Please select an image file', 'Invalid file');
-      return;
-    }
-
-    this.imagePreviewUrl = URL.createObjectURL(file);
+    // No-op, retained for template select change binding.
   }
 
   sendBulkMessage(): void {
-    if (!this.canSend) {
+    if (!this.canSend || this.isSending) {
       return;
     }
 
-    const payload = {
-      group: this.selectedGroup,
+    if (!this.selectedGroup?._id) {
+      this.toastr.error('Please select a valid group', 'Validation');
+      return;
+    }
+
+    const payload: SendBulkMessagePayload = {
+      groupId: this.selectedGroup._id,
       message: this.messageText.trim(),
-      file: this.selectedFile
+      channel: this.selectedChannel,
     };
 
-    console.log('Sending bulk message:', payload);
-    this.toastr.success('Message ready to send', 'Success');
-  }
+    this.isSending = true;
+    this.bulkMessageService.sendBulkMessage(payload).subscribe({
+      next: (response) => {
+        this.isSending = false;
+        if (!response.success) {
+          this.toastr.error(response.message || 'Failed to send message', 'Error');
+          return;
+        }
 
-  private clearPreviewUrl(): void {
-    if (this.imagePreviewUrl) {
-      URL.revokeObjectURL(this.imagePreviewUrl);
-      this.imagePreviewUrl = null;
-    }
+        this.toastr.success(
+          `${response.sentCount} recipient(s) queued via ${this.selectedChannel.toUpperCase()}`,
+          'Bulk Message Sent'
+        );
+      },
+      error: (error) => {
+        this.isSending = false;
+        this.toastr.error(error?.error?.message || 'Failed to send bulk message', 'Error');
+      }
+    });
   }
 }

@@ -1,0 +1,39 @@
+.manage-report-shell {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+app-report-list,
+app-report-form {
+  display: block;
+  flex: 1;
+  min-height: 0;
+}
+
+.top-actions {
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+
+  button {
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .back-btn {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #334155;
+  }
+
+  .download-btn {
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+}

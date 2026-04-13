@@ -6,8 +6,8 @@ import type { Instance } from 'flatpickr/dist/types/instance';
 @Component({
   selector: 'app-date-time-picker',
   standalone: true,
-  template: '<input #pickerInput type="text" class="date-time-input" [placeholder]="placeholder" />',
-  styleUrl: './date-time-picker.component.scss',
+  templateUrl: './date-time-picker.component.html',
+  styleUrls: ['./date-time-picker.component.scss'],
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -19,6 +19,7 @@ import type { Instance } from 'flatpickr/dist/types/instance';
 export class DateTimePickerComponent implements ControlValueAccessor, AfterViewInit, OnDestroy {
   @Input() placeholder = 'Select date and time';
   @Input() defaultToCurrentTime = false;
+  @Input() enableSeconds = false;
 
   @ViewChild('pickerInput', { static: true }) pickerInput!: ElementRef<HTMLInputElement>;
 
@@ -26,21 +27,19 @@ export class DateTimePickerComponent implements ControlValueAccessor, AfterViewI
   private onChange: (value: string) => void = () => {};
   private onTouched: () => void = () => {};
   private pendingValue: string | null = null;
+  isDisabled = false;
 
   ngAfterViewInit(): void {
-    const now = new Date();
-
     this.flatpickrInstance = flatpickr(this.pickerInput.nativeElement, {
       enableTime: true,
+      enableSeconds: this.enableSeconds,
       time_24hr: true,
-      dateFormat: 'd-m-Y H:i',
-      minuteIncrement: 5,
-      defaultHour: now.getHours(),
-      defaultMinute: now.getMinutes(),
+      monthSelectorType: 'dropdown',
+      dateFormat: this.enableSeconds ? 'd-m-Y H:i:S' : 'd-m-Y H:i',
       disableMobile: true,
       onChange: (selectedDates) => {
         const selectedDate = selectedDates[0];
-        this.onChange(selectedDate ? selectedDate.toISOString() : '');
+        this.onChange(selectedDate ? this.toIsoLocal(selectedDate) : '');
       },
       onClose: () => {
         this.onTouched();
@@ -53,8 +52,9 @@ export class DateTimePickerComponent implements ControlValueAccessor, AfterViewI
         }
 
         if (this.defaultToCurrentTime) {
-          this.flatpickrInstance?.setDate(now, true);
-          this.onChange(now.toISOString());
+          const now = new Date();
+          this.flatpickrInstance?.setDate(now, false);
+          this.onChange(this.toIsoLocal(now));
         }
       },
     });
@@ -62,9 +62,7 @@ export class DateTimePickerComponent implements ControlValueAccessor, AfterViewI
 
   writeValue(value: string | null): void {
     if (!value) {
-      if (this.flatpickrInstance) {
-        this.flatpickrInstance.clear();
-      }
+      this.flatpickrInstance?.clear();
       return;
     }
 
@@ -85,21 +83,25 @@ export class DateTimePickerComponent implements ControlValueAccessor, AfterViewI
   }
 
   setDisabledState(isDisabled: boolean): void {
-    if (!this.flatpickrInstance) {
-      return;
+    this.isDisabled = isDisabled;
+    this.flatpickrInstance?.set('clickOpens', !isDisabled);
+    if (this.flatpickrInstance) {
+      this.flatpickrInstance.input.disabled = isDisabled;
     }
-
-    this.flatpickrInstance.input.disabled = isDisabled;
   }
 
   ngOnDestroy(): void {
     this.flatpickrInstance?.destroy();
   }
 
+  markTouched(): void {
+    this.onTouched();
+  }
+
   private setPickerDate(value: string): void {
     const parsedDate = this.parseValue(value);
     if (parsedDate) {
-      this.flatpickrInstance?.setDate(parsedDate, true);
+      this.flatpickrInstance?.setDate(parsedDate, false);
     }
   }
 
@@ -109,15 +111,26 @@ export class DateTimePickerComponent implements ControlValueAccessor, AfterViewI
       return isoDate;
     }
 
-    const [datePart, timePart] = value.split(' ');
+    const normalized = value.trim().replace(' ', 'T');
+    const [datePart, timePart] = normalized.split('T');
     if (!datePart || !timePart) {
       return null;
     }
 
-    const [day, month, year] = datePart.split('-').map(Number);
-    const [hours, minutes] = timePart.split(':').map(Number);
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hours, minutes, seconds] = timePart.split(':').map(Number);
 
-    const parsed = new Date(year, month - 1, day, hours, minutes);
+    const parsed = new Date(year, month - 1, day, hours || 0, minutes || 0, seconds || 0);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private toIsoLocal(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
   }
 }

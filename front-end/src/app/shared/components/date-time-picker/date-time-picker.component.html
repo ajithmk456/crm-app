@@ -1,0 +1,10 @@
+<div class="date-time-wrapper" [class.disabled]="isDisabled">
+  <input
+    #pickerInput
+    type="text"
+    class="date-time-input"
+    [placeholder]="placeholder"
+    [disabled]="isDisabled"
+    (blur)="markTouched()"
+  />
+</div>

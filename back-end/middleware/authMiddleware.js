@@ -17,6 +17,12 @@ const protect = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ success: false, message: 'Not authorized, user not found' });
     }
+
+    const tokenVersion = Number(decoded.tokenVersion || 0);
+    if (tokenVersion !== Number(user.tokenVersion || 0)) {
+      return res.status(401).json({ success: false, message: 'Session expired. Please login again.' });
+    }
+
     req.user = user;
     next();
   } catch (error) {

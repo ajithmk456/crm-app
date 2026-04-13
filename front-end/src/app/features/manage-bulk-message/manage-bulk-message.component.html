@@ -34,6 +34,20 @@
         </div>
       </div>
 
+      <div class="form-group">
+        <label>Message Channel</label>
+        <div class="channel-toggle">
+          <label>
+            <input type="radio" name="channel" [(ngModel)]="selectedChannel" value="sms">
+            SMS
+          </label>
+          <label>
+            <input type="radio" name="channel" [(ngModel)]="selectedChannel" value="whatsapp">
+            WhatsApp
+          </label>
+        </div>
+      </div>
+
       <!-- Message -->
       <div class="form-group">
         <label>Message</label>
@@ -43,24 +57,12 @@
         </textarea>
       </div>
 
-      <!-- Attachment -->
-      <div class="form-group">
-        <label>Attachment (Optional)</label>
-
-        <div class="file-upload">
-          <input type="file" accept="image/*" (change)="onFileSelect($event)">
-          <span *ngIf="selectedFile">
-            {{ selectedFile.name }}
-          </span>
-        </div>
-      </div>
-
       <!-- Send Button -->
       <div class="action-section">
         <button class="btn-send"
-                [disabled]="!canSend"
+                [disabled]="!canSend || isSending"
                 (click)="sendBulkMessage()">
-          Send Message
+          {{ isSending ? 'Sending...' : 'Send Message' }}
         </button>
       </div>
 
@@ -81,17 +83,12 @@
           {{ selectedGroupMemberCount }} members selected
         </div>
 
+        <div class="preview-meta">
+          Channel: {{ selectedChannel === 'sms' ? 'SMS' : 'WhatsApp' }}
+        </div>
+
         <div class="preview-message">
           {{ messageText || 'Your message preview will appear here...' }}
-        </div>
-
-        <div class="preview-image" *ngIf="imagePreviewUrl">
-          <img [src]="imagePreviewUrl" alt="Selected image preview">
-        </div>
-
-        <div class="preview-attachment"
-             *ngIf="selectedFile">
-          📎 {{ selectedFile.name }}
         </div>
 
       </div>
@@ -99,5 +96,6 @@
     </div>
 
   </div>
+
 
 </div>

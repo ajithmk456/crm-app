@@ -3,7 +3,13 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
-import { AuthService } from '../auth/auth.service';
+import { AuthService, ProfileBankDetails, UpdateProfilePayload } from '../auth/auth.service';
+
+const DEFAULT_BANK_DETAILS: ProfileBankDetails = {
+  bankName: 'State Bank of India, Coimbatore Nagar Branch',
+  accountNumber: '44344893154',
+  ifsc: 'SBIN0008608',
+};
 
 @Component({
   selector: 'app-profile',
@@ -20,8 +26,26 @@ export class ProfileComponent implements OnInit {
     name: ['', [Validators.required, Validators.minLength(2)]],
     email: [{ value: '', disabled: true }],
     newPassword: [''],
-    confirmPassword: ['']
+    confirmPassword: [''],
+    bankDetails: this.fb.group({
+      bankName: ['', Validators.required],
+      accountNumber: ['', Validators.required],
+      ifsc: ['', Validators.required],
+    }),
   });
+
+  get isAdmin(): boolean {
+    return this.authService.isAdmin();
+  }
+
+  private get bankDetailsValue(): ProfileBankDetails {
+    const raw = this.profileForm.getRawValue().bankDetails;
+    return {
+      bankName: String(raw?.bankName || '').trim(),
+      accountNumber: String(raw?.accountNumber || '').trim(),
+      ifsc: String(raw?.ifsc || '').trim().toUpperCase(),
+    };
+  }
 
   get initials(): string {
     const name: string = this.currentUser?.name || '';
@@ -48,11 +72,18 @@ export class ProfileComponent implements OnInit {
 
   ngOnInit(): void {
     this.currentUser = this.authService.getUser();
+    const profileBankDetails = this.currentUser?.bankDetails || DEFAULT_BANK_DETAILS;
+
     if (this.currentUser) {
       this.profileForm.patchValue({
         name: this.currentUser.name,
-        email: this.currentUser.email
+        email: this.currentUser.email,
+        bankDetails: profileBankDetails,
       });
+    }
+
+    if (!this.isAdmin) {
+      this.profileForm.get('bankDetails')?.disable({ emitEvent: false });
     }
   }
 
@@ -75,17 +106,25 @@ export class ProfileComponent implements OnInit {
 
     this.saving = true;
 
-    const payload: { name: string; newPassword?: string } = {
+    const payload: UpdateProfilePayload = {
       name: this.profileForm.get('name')?.value || ''
     };
     if (newPassword) {
       payload.newPassword = newPassword;
     }
 
+    if (this.isAdmin) {
+      payload.bankDetails = this.bankDetailsValue;
+    }
+
     this.authService.updateProfile(payload).subscribe({
       next: (res) => {
         if (res?.success) {
-          this.applyProfileUpdate(res.data?.name || payload.name, true);
+          this.applyProfileUpdate(
+            res.data?.name || payload.name || '',
+            true,
+            res.data?.bankDetails || payload.bankDetails,
+          );
         } else {
           this.saving = false;
           this.toastr.error(res?.message || 'Update failed.', 'Error');
@@ -93,7 +132,7 @@ export class ProfileComponent implements OnInit {
       },
       error: (err) => {
         if (err?.status === 404) {
-          this.applyProfileUpdate(payload.name, false);
+          this.applyProfileUpdate(payload.name || '', false, payload.bankDetails);
           return;
         }
 
@@ -103,10 +142,11 @@ export class ProfileComponent implements OnInit {
     });
   }
 
-  private applyProfileUpdate(name: string, persistedToApi: boolean): void {
+  private applyProfileUpdate(name: string, persistedToApi: boolean, bankDetails?: ProfileBankDetails): void {
     const updatedUser = {
       ...this.currentUser,
-      name
+      name,
+      bankDetails: bankDetails || this.currentUser?.bankDetails || DEFAULT_BANK_DETAILS,
     };
 
     this.authService.saveUser(updatedUser);
@@ -115,7 +155,8 @@ export class ProfileComponent implements OnInit {
     this.profileForm.patchValue({
       name,
       newPassword: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      bankDetails: updatedUser.bankDetails,
     });
 
     if (persistedToApi) {

@@ -1,6 +1,10 @@
 const Employee = require('../models/Employee');
 const User = require('../models/User');
 
+const getAuthRoleFromEmployeeRole = (employeeRole) => {
+  return String(employeeRole || '').toLowerCase() === 'admin' ? 'Admin' : 'Employee';
+};
+
 exports.addEmployee = async (req, res, next) => {
   try {
     const { fullName, email, phone, address, role, status } = req.body;
@@ -18,12 +22,14 @@ exports.addEmployee = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Email already exists.' });
     }
 
+    const normalizedEmployeeRole = String(role || 'Employee');
+
     const employee = await Employee.create({
       fullName,
       email,
       phone,
       address,
-      role: role || 'Employee',
+      role: normalizedEmployeeRole,
       status: typeof status === 'boolean' ? status : true,
     });
 
@@ -31,7 +37,7 @@ exports.addEmployee = async (req, res, next) => {
       await User.create({
         name: fullName,
         email: email.toLowerCase(),
-        role: 'Employee',
+        role: getAuthRoleFromEmployeeRole(normalizedEmployeeRole),
         password: null,
         passwordSet: false,
       });
@@ -111,15 +117,21 @@ exports.updateEmployee = async (req, res, next) => {
 
     const authUser = await User.findOne({ email: oldEmail.toLowerCase() });
     if (authUser) {
+      const nextAuthRole = getAuthRoleFromEmployeeRole(employee.role);
+      const roleChanged = authUser.role !== nextAuthRole;
+
       authUser.name = employee.fullName;
       authUser.email = employee.email.toLowerCase();
-      authUser.role = 'Employee';
+      authUser.role = nextAuthRole;
+      if (roleChanged) {
+        authUser.tokenVersion = (authUser.tokenVersion || 0) + 1;
+      }
       await authUser.save();
     } else {
       await User.create({
         name: employee.fullName,
         email: employee.email.toLowerCase(),
-        role: 'Employee',
+        role: getAuthRoleFromEmployeeRole(employee.role),
         password: null,
         passwordSet: false,
       });
@@ -138,7 +150,10 @@ exports.deleteEmployee = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
 
-    await User.findOneAndDelete({ email: employee.email.toLowerCase(), role: { $in: ['Employee', 'user'] } });
+    await User.findOneAndDelete({
+      email: employee.email.toLowerCase(),
+      role: { $in: ['Employee', 'employee', 'Admin', 'admin', 'user'] },
+    });
 
     res.status(200).json({ success: true, message: 'Employee deleted successfully' });
   } catch (error) {

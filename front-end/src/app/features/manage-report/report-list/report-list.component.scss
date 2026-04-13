@@ -1,0 +1,145 @@
+.report-list-shell {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #dde3ef;
+  padding: 18px;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+
+  h2 {
+    margin: 0;
+    font-size: 24px;
+    color: #0f172a;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 14px;
+  }
+}
+
+.btn-primary {
+  border: 0;
+  background: linear-gradient(135deg, #0d9488, #059669);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.filters {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1.7fr 1fr 1fr 1fr;
+  gap: 10px;
+
+  input,
+  select {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    outline: none;
+    background: #fff;
+
+    &:focus {
+      border-color: #0d9488;
+      box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+    }
+  }
+
+  app-date-time-picker {
+    display: block;
+    min-width: 0;
+  }
+}
+
+.table-wrap {
+  margin-top: 16px;
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+
+  th,
+  td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 11px 10px;
+    text-align: left;
+    font-size: 14px;
+  }
+
+  th {
+    background: #f8fafc;
+    font-weight: 700;
+    color: #334155;
+  }
+}
+
+.actions-col {
+  text-align: right;
+  white-space: nowrap;
+
+  button {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #334155;
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-left: 6px;
+    cursor: pointer;
+
+    &.delete {
+      color: #b91c1c;
+      border-color: #fecaca;
+      background: #fff7f7;
+    }
+  }
+}
+
+.status {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+
+  &.paid {
+    color: #166534;
+    background: #dcfce7;
+  }
+
+  &.pending {
+    color: #9a3412;
+    background: #ffedd5;
+  }
+}
+
+.empty,
+.loading {
+  text-align: center;
+  color: #64748b;
+  padding: 18px;
+}
+
+@media (max-width: 960px) {
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

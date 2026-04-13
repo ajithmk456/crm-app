@@ -30,6 +30,18 @@ export interface SetPasswordRequest {
   password: string;
 }
 
+export interface ProfileBankDetails {
+  bankName: string;
+  accountNumber: string;
+  ifsc: string;
+}
+
+export interface UpdateProfilePayload {
+  name?: string;
+  newPassword?: string;
+  bankDetails?: ProfileBankDetails;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -82,7 +94,7 @@ export class AuthService {
     this.clearUser();
   }
 
-  updateProfile(data: { name?: string; newPassword?: string }): Observable<any> {
+  updateProfile(data: UpdateProfilePayload): Observable<any> {
     return this.http.put<any>('/api/auth/profile', data);
   }
 
@@ -95,6 +107,15 @@ export class AuthService {
     return this.getUserRole() === 'admin';
   }
 
+  isTemporaryAdmin(): boolean {
+    const user = this.getUser();
+    return this.isAdmin() && !!user?.isTemporaryAdmin;
+  }
+
+  isPrimaryAdmin(): boolean {
+    return this.isAdmin() && !this.isTemporaryAdmin();
+  }
+
   isEmployee(): boolean {
     const role = this.getUserRole();
     return role === 'employee' || role === 'user';
@@ -104,3 +125,8 @@ export class AuthService {
     return !!this.getToken();
   }
 }
+
+
+
+
+

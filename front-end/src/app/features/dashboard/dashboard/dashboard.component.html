@@ -4,39 +4,52 @@
 
     <div class="welcome-section">
       <h1>Welcome Back, {{ displayName }} 👋</h1>
-      <p>Manage your business operations efficiently</p>
+      <p *ngIf="isAdmin">Manage your business operations efficiently</p>
+      <p *ngIf="isEmployee">Track and update your day-to-day work from one place</p>
     </div>
 
     <div class="cards-grid">
 
-      <div class="card" (click)="nav('manage-chat')">
+      <div class="card" *ngIf="isAdmin" (click)="nav('manage-chat')">
         <div class="icon icon-chat"><i class="fa-solid fa-comments"></i></div>
         <h3>Manage Chat</h3>
         <p>View and manage employee or client chats</p>
       </div>
 
-      <div class="card" (click)="nav('manage-task')">
+      <div class="card" *ngIf="isPrimaryAdmin" (click)="nav('manage-task')">
         <div class="icon icon-task"><i class="fa-solid fa-clipboard-check"></i></div>
         <h3>Manage Task</h3>
         <p>Create, assign, and track tasks</p>
       </div>
 
-      <div class="card" (click)="nav('manage-employee')">
+      <div class="card" *ngIf="isPrimaryAdmin" (click)="nav('manage-employee')">
         <div class="icon icon-employee"><i class="fa-solid fa-user-tie"></i></div>
         <h3>Manage Employee</h3>
         <p>Add, update, and manage employee details</p>
       </div>
 
-       <div class="card" (click)="nav('manage-group')">
+      <div class="card" *ngIf="isAdmin" (click)="nav('manage-group')">
         <div class="icon icon-group"><i class="fa-solid fa-user-group"></i></div>
         <h3>Manage Group</h3>
         <p>Create and Edit group</p>
       </div>
 
-      <div class="card" (click)="nav('manage-bulk-message')">
+      <div class="card" *ngIf="isAdmin" (click)="nav('manage-bulk-message')">
         <div class="icon icon-bulk"><i class="fa-solid fa-envelopes-bulk"></i></div>
         <h3>Manage Bulk Message</h3>
         <p>Send announcements or bulk notifications</p>
+      </div>
+
+      <div class="card" *ngIf="isAdmin" (click)="nav('manage-report')">
+        <div class="icon icon-report"><i class="fa-solid fa-file-invoice"></i></div>
+        <h3>Manage Report</h3>
+        <p>Create, preview, and download invoice reports</p>
+      </div>
+
+      <div class="card" *ngIf="showMyTask" (click)="goToMyTask()">
+        <div class="icon icon-my-task"><i class="fa-solid fa-list-check"></i></div>
+        <h3>My Task</h3>
+        <p>View assigned tasks and update status</p>
       </div>
 
     </div>

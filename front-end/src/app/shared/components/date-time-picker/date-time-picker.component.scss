@@ -1,6 +1,15 @@
+.date-time-wrapper {
+  display: block;
+  width: 100%;
+
+  &.disabled {
+    opacity: 0.8;
+  }
+}
+
 .date-time-input {
   width: 100%;
-  padding: 10px 14px;
+  height: 40px;
   border-radius: 10px;
   border: 1px solid #d7dee7;
   background: #ffffff;
@@ -14,4 +23,38 @@
     border-color: #2b6ef2;
     box-shadow: 0 0 0 3px rgba(43, 110, 242, 0.12);
   }
+  padding: 10px 12px;
+}
+
+:host ::ng-deep .flatpickr-calendar {
+  border: 1px solid #d7dee7;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14);
+}
+
+:host ::ng-deep .flatpickr-current-month {
+  padding-top: 6px;
+}
+
+:host ::ng-deep .flatpickr-monthDropdown-months {
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-weight: 600;
+}
+
+:host ::ng-deep .flatpickr-monthDropdown-months option {
+  color: #0f172a;
+  background: #ffffff;
+}
+
+:host ::ng-deep .flatpickr-current-month .numInputWrapper input {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+:host ::ng-deep .flatpickr-time input,
+:host ::ng-deep .flatpickr-time .flatpickr-am-pm {
+  color: #0f172a;
 }

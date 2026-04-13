@@ -1,0 +1,104 @@
+<section class="report-form-shell">
+  <div class="form-panel">
+    <h2>{{ viewMode ? 'View Report' : (editMode ? 'Edit Report' : 'Create Report') }}</h2>
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <div class="form-grid">
+        <label>
+          Date
+          <app-date-time-picker
+            formControlName="date"
+            placeholder="Select date and time">
+          </app-date-time-picker>
+        </label>
+
+        <label>
+          Place of Supply
+          <input type="text" formControlName="placeOfSupply" placeholder="Tamil Nadu">
+        </label>
+
+        <label>
+          Status
+          <select formControlName="status">
+            <option value="Pending">Pending</option>
+            <option value="Paid">Paid</option>
+          </select>
+        </label>
+      </div>
+
+      <div formGroupName="client" class="section">
+        <h3>Client Details</h3>
+        <div class="form-grid">
+          <label>Client Name<input type="text" formControlName="name"></label>
+          <label>GST<input type="text" formControlName="gst"></label>
+          <label class="full">Address<textarea rows="2" formControlName="address"></textarea></label>
+        </div>
+      </div>
+
+      <div class="section" formArrayName="items">
+        <div class="section-header">
+          <h3>Service Entries</h3>
+          <button type="button" (click)="addItem()" [disabled]="viewMode">+ Add Item</button>
+        </div>
+
+        <div class="item-table">
+          <div class="item-head row">
+            <span>Description</span>
+            <span>HSN/SAC</span>
+            <span>Qty</span>
+            <span>Rate</span>
+            <span>Amount</span>
+            <span>Action</span>
+          </div>
+
+          <div class="row" *ngFor="let item of itemsArray.controls; let i = index" [formGroupName]="i">
+            <div class="desc-cell">
+              <input type="text" formControlName="description" placeholder="Professional fee">
+              <input type="text" formControlName="subDescription" placeholder="Sub-description (optional)">
+            </div>
+            <input type="text" formControlName="hsn" placeholder="9983">
+            <input type="number" min="0" formControlName="quantity" (input)="updateAmountFromQtyRate(i)">
+            <input type="number" min="0" formControlName="rate" (input)="updateAmountFromQtyRate(i)">
+            <input type="number" min="0" formControlName="amount">
+            <button type="button" class="danger" (click)="removeItem(i)" [disabled]="viewMode || itemsArray.length <= 1">Remove</button>
+          </div>
+        </div>
+      </div>
+
+      <div formGroupName="bankDetails" class="section">
+        <h3>Bank Details</h3>
+        <p class="section-note">These values are managed in Admin My Profile.</p>
+        <div class="form-grid">
+          <label>Bank Name<input type="text" formControlName="bankName" readonly></label>
+          <label>Account Number<input type="text" formControlName="accountNumber" readonly></label>
+          <label>IFSC<input type="text" formControlName="ifsc" readonly></label>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>
+          Declaration
+          <textarea rows="2" formControlName="declaration"></textarea>
+        </label>
+      </div>
+
+      <div class="totals">
+        <div><span>Subtotal</span><strong>{{ subtotal | number:'1.2-2' }}</strong></div>
+        <div><span>CGST (9%)</span><strong>{{ cgst | number:'1.2-2' }}</strong></div>
+        <div><span>SGST (9%)</span><strong>{{ sgst | number:'1.2-2' }}</strong></div>
+        <div class="total"><span>Total</span><strong>{{ total | number:'1.2-2' }}</strong></div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="ghost" (click)="cancel.emit()">Back</button>
+        <button *ngIf="!viewMode" type="submit" class="primary" [disabled]="form.invalid || !normalizedItems.length">
+          {{ editMode ? 'Update Report' : 'Create Report' }}
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="preview-panel">
+    <app-report-preview [report]="previewData"></app-report-preview>
+  </div>
+</section>

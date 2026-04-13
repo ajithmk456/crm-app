@@ -27,6 +27,14 @@
       </div>
     </button>
 
+    <button class="stat-card report-sent" [class.active]="activeFilter === 'report-sent'" (click)="setFilter('report-sent')">
+      <div class="card-icon"><i class="fa-regular fa-paper-plane"></i></div>
+      <div class="card-info">
+        <h3>{{ reportSentCount }}</h3>
+        <p>Report Sent</p>
+      </div>
+    </button>
+
     <button class="stat-card completed" [class.active]="activeFilter === 'completed'" (click)="setFilter('completed')">
       <div class="card-icon"><i class="fa-solid fa-circle-check"></i></div>
       <div class="card-info">
@@ -87,27 +95,11 @@
               </td>
               <td class="actions-col">
                 <button
-                  class="btn-inline start"
-                  *ngIf="task.status === 'Pending'"
-                  (click)="startTask(task)"
-                  [disabled]="actionLoading.has(task._id || task.title)">
-                  <i class="fa-solid fa-play"></i>
-                  Start Task
+                  class="btn-inline view"
+                  (click)="openTaskDetails(task)">
+                  <i class="fa-regular fa-eye"></i>
+                  View Task
                 </button>
-
-                <button
-                  class="btn-inline complete"
-                  *ngIf="task.status === 'In Progress'"
-                  (click)="markComplete(task)"
-                  [disabled]="actionLoading.has(task._id || task.title)">
-                  <i class="fa-solid fa-check"></i>
-                  Mark Complete
-                </button>
-
-                <span class="done-text" *ngIf="task.status === 'Completed'">
-                  <i class="fa-solid fa-circle-check"></i>
-                  Done
-                </span>
               </td>
             </tr>
           </tbody>
@@ -138,5 +130,84 @@
         Task Reminders
       </button>
     </aside>
+  </div>
+</div>
+
+<div class="task-detail-overlay" *ngIf="isTaskDetailOpen && selectedTask" (click)="closeTaskDetails()">
+  <div class="task-detail-modal" (click)="$event.stopPropagation()">
+    <div class="task-detail-head">
+      <div>
+        <h3>{{ selectedTask.title }}</h3>
+        <p>{{ selectedTask.description || 'No description provided.' }}</p>
+      </div>
+      <button type="button" class="close-btn" (click)="closeTaskDetails()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="task-detail-grid">
+      <div class="detail-item">
+        <span class="label">Customer Name</span>
+        <span class="value">{{ selectedTask.customerName || '-' }}</span>
+      </div>
+      <div class="detail-item">
+        <span class="label">Customer Phone</span>
+        <span class="value">{{ selectedTask.customerPhone || '-' }}</span>
+      </div>
+      <div class="detail-item">
+        <span class="label">Priority</span>
+        <span class="value">
+          <span class="priority-badge" [ngClass]="selectedTask.priority.toLowerCase()">{{ selectedTask.priority }}</span>
+        </span>
+      </div>
+      <div class="detail-item">
+        <span class="label">Due Date</span>
+        <span class="value">{{ formatDate(selectedTask.dueDate) }}</span>
+      </div>
+      <div class="detail-item">
+        <span class="label">Status</span>
+        <span class="value">
+          <span class="status-badge" [ngClass]="statusClass(selectedTask.status)">{{ selectedTask.status }}</span>
+        </span>
+      </div>
+      <div class="detail-item">
+        <span class="label">Report Sent</span>
+        <span class="value">{{ selectedTask.reportSent || selectedTask.status === 'Report Sent' ? 'Yes' : 'No' }}</span>
+      </div>
+    </div>
+
+    <div class="task-detail-actions">
+      <button
+        class="btn-inline start"
+        *ngIf="selectedTask.status === 'Pending'"
+        (click)="startTask(selectedTask)"
+        [disabled]="isTaskBusy(selectedTask)">
+        <i class="fa-solid fa-play"></i>
+        Start Task
+      </button>
+
+      <button
+        class="btn-inline report-sent"
+        *ngIf="selectedTask.status === 'In Progress' && !selectedTask.reportSent"
+        (click)="markReportSent(selectedTask)"
+        [disabled]="isTaskBusy(selectedTask)">
+        <i class="fa-regular fa-paper-plane"></i>
+        Mark Report Sent
+      </button>
+
+      <button
+        class="btn-inline complete"
+        *ngIf="selectedTask.status === 'Report Sent' || (selectedTask.status === 'In Progress' && selectedTask.reportSent)"
+        (click)="markComplete(selectedTask)"
+        [disabled]="isTaskBusy(selectedTask)">
+        <i class="fa-solid fa-check"></i>
+        Mark Complete
+      </button>
+
+      <span class="done-text" *ngIf="selectedTask.status === 'Completed'">
+        <i class="fa-solid fa-circle-check"></i>
+        Task Completed
+      </span>
+    </div>
   </div>
 </div>

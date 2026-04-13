@@ -32,6 +32,7 @@ exports.createTask = async (req, res, next) => {
       customerName,
       customerPhone,
       paymentReceived,
+      reportSent,
       priority,
       status,
       dueDate,
@@ -48,6 +49,7 @@ exports.createTask = async (req, res, next) => {
       customerName: customerName || '',
       customerPhone: customerPhone || '',
       paymentReceived: !!paymentReceived,
+      reportSent: status === 'Report Sent' ? true : !!reportSent,
       priority: priority || 'Medium',
       status: status || 'Pending',
       dueDate,
@@ -221,6 +223,7 @@ exports.updateTask = async (req, res, next) => {
       customerName,
       customerPhone,
       paymentReceived,
+      reportSent,
       priority,
       status,
       dueDate,
@@ -230,11 +233,17 @@ exports.updateTask = async (req, res, next) => {
 
     // Employees can only change their own task status.
     if (!isAdmin) {
-      if (!status || !['Pending', 'In Progress', 'Completed'].includes(status)) {
+      if (!status || !['Pending', 'In Progress', 'Report Sent', 'Completed'].includes(status)) {
         return res.status(400).json({ success: false, message: 'Valid status is required.' });
       }
 
+      const nextReportSent = status === 'Report Sent' ? true : (reportSent !== undefined ? !!reportSent : !!task.reportSent);
+      if (status === 'Completed' && !nextReportSent) {
+        return res.status(400).json({ success: false, message: 'Mark report as sent before completing the task.' });
+      }
+
       task.status = status;
+      task.reportSent = nextReportSent;
       if (paymentReceived !== undefined) {
         task.paymentReceived = !!paymentReceived;
       }
@@ -252,8 +261,15 @@ exports.updateTask = async (req, res, next) => {
     task.customerName = customerName ?? task.customerName;
     task.customerPhone = customerPhone ?? task.customerPhone;
     if (paymentReceived !== undefined) task.paymentReceived = !!paymentReceived;
+    if (reportSent !== undefined) task.reportSent = !!reportSent;
     task.priority = priority ?? task.priority;
     task.status = status ?? task.status;
+    if (task.status === 'Report Sent') {
+      task.reportSent = true;
+    }
+    if (task.status === 'Completed' && !task.reportSent) {
+      return res.status(400).json({ success: false, message: 'Mark report as sent before completing the task.' });
+    }
     task.dueDate = dueDate ?? task.dueDate;
     if (reminderEnabled !== undefined) task.reminderEnabled = reminderEnabled;
     if (reminderBefore !== undefined) task.reminderBefore = reminderBefore;

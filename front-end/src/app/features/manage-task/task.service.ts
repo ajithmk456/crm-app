@@ -10,8 +10,9 @@ export interface Task {
   customerName?: string;
   customerPhone?: string;
   paymentReceived?: boolean;
+  reportSent?: boolean;
   priority: 'Low' | 'Medium' | 'High';
-  status: 'Pending' | 'In Progress' | 'Completed';
+  status: 'Pending' | 'In Progress' | 'Report Sent' | 'Completed';
   dueDate: string;
   reminderEnabled?: boolean;
   reminderBefore?: string | number;

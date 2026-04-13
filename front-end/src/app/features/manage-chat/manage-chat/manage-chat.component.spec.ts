@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 
 import { ManageChatComponent } from './manage-chat.component';
+import { ChatService } from './chat.service';
 
 describe('ManageChatComponent', () => {
   let component: ManageChatComponent;
@@ -8,7 +10,17 @@ describe('ManageChatComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ManageChatComponent]
+      imports: [ManageChatComponent],
+      providers: [
+        {
+          provide: ChatService,
+          useValue: {
+            getConversations: () => of({ success: true, data: [] }),
+            getMessages: () => of({ success: true, data: [] }),
+            sendMessage: () => of({ success: true, data: { messageId: 'msg-1' } })
+          }
+        }
+      ]
     })
     .compileComponents();
     

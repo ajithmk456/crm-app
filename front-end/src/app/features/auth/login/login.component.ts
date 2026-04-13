@@ -115,12 +115,7 @@ export class LoginComponent {
           this.authService.setToken(response.data.token);
           if (response.data.user) {
             this.authService.saveUser(response.data.user);
-            const userRole = (response.data.user?.role || 'user').toLowerCase();
-            if (userRole === 'admin') {
-              this.router.navigate(['/dashboard']);
-            } else {
-              this.router.navigate(['/employee-dashboard']);
-            }
+            this.router.navigate(['/dashboard']);
           } else {
             this.router.navigate(['/dashboard']);
           }
@@ -162,12 +157,7 @@ export class LoginComponent {
           this.authService.setToken(response.data.token);
           if (response.data.user) {
             this.authService.saveUser(response.data.user);
-            const userRole = (response.data.user?.role || 'user').toLowerCase();
-            if (userRole === 'admin') {
-              this.router.navigate(['/dashboard']);
-            } else {
-              this.router.navigate(['/employee-dashboard']);
-            }
+            this.router.navigate(['/dashboard']);
           } else {
             this.router.navigate(['/dashboard']);
           }

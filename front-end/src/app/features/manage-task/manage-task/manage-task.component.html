@@ -30,7 +30,16 @@
       <option>All Status</option>
       <option>Pending</option>
       <option>In Progress</option>
+      <option>Report Sent</option>
       <option>Completed</option>
+    </select>
+
+    <select
+      *ngIf="isAdmin"
+      formControlName="employeeFilter"
+      style="flex: 1.1; min-width: 170px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; height: 40px; box-sizing: border-box; background-color: white; cursor: pointer;">
+      <option value="All Employees">All Employees</option>
+      <option *ngFor="let emp of employees" [value]="emp._id">{{ emp.fullName }}</option>
     </select>
 
     <app-date-time-picker
@@ -56,6 +65,7 @@
           <th>Priority</th>
           <th>Status</th>
           <th>Payment</th>
+          <th>Report Sent</th>
           <th>Due Date</th>
           <th *ngIf="isAdmin" class="text-center">Actions</th>
         </tr>
@@ -84,6 +94,11 @@
           <td>
             <span class="badge payment-badge" [ngClass]="task.paymentReceived ? 'payment-received' : 'payment-not-received'">
               {{ task.paymentReceived ? 'Received' : 'Pending' }}
+            </span>
+          </td>
+          <td>
+            <span class="badge" [ngClass]="task.reportSent ? 'completed' : 'pending'">
+              {{ task.reportSent ? 'Yes' : 'No' }}
             </span>
           </td>
           <td>{{ task.dueDate | date:'dd/MM/yyyy HH:mm' }}</td>
@@ -149,6 +164,14 @@
         </label>
       </div>
 
+      <div class="form-group switch-group">
+        <label>Report Sent</label>
+        <label class="switch">
+          <input type="checkbox" formControlName="reportSent" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
       <div class="form-group">
         <label>Priority</label>
         <select formControlName="priority">
@@ -163,8 +186,12 @@
         <select formControlName="status">
           <option value="Pending">Pending</option>
           <option value="In Progress">In Progress</option>
+          <option value="Report Sent">Report Sent</option>
           <option value="Completed">Completed</option>
         </select>
+        <small *ngIf="taskForm.get('status')?.value === 'Completed' && !reportSentSelected" style="color: #b91c1c; margin-top: 4px; display: inline-block;">
+          Mark report as sent before completing task.
+        </small>
       </div>
 
       <div class="form-group">

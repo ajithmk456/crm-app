@@ -1,9 +1,28 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const Employee = require('../models/Employee');
 
-const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '24h' });
+const generateToken = (user) => {
+  return jwt.sign({ id: user._id, tokenVersion: user.tokenVersion || 0 }, process.env.JWT_SECRET, { expiresIn: '24h' });
+};
+
+const getEmployeeAccountContext = async (email) => {
+  const employee = await Employee.findOne({ email: String(email || '').toLowerCase().trim() }).select('role');
+  if (!employee) {
+    return {
+      isEmployeeAccount: false,
+      isTemporaryAdmin: false,
+      effectiveRole: null,
+    };
+  }
+
+  const normalizedEmployeeRole = String(employee.role || '').toLowerCase();
+  return {
+    isEmployeeAccount: true,
+    isTemporaryAdmin: normalizedEmployeeRole === 'admin',
+    effectiveRole: normalizedEmployeeRole === 'admin' ? 'Admin' : 'Employee',
+  };
 };
 
 exports.login = async (req, res, next) => {
@@ -29,7 +48,14 @@ exports.login = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials.' });
     }
 
-    const token = generateToken(user._id);
+    const accountContext = await getEmployeeAccountContext(user.email);
+    const effectiveRole = accountContext.effectiveRole || user.role;
+    if (effectiveRole !== user.role) {
+      user.role = effectiveRole;
+      await user.save();
+    }
+
+    const token = generateToken(user);
 
     res.status(200).json({
       success: true,
@@ -38,7 +64,9 @@ exports.login = async (req, res, next) => {
           id: user._id,
           name: user.name,
           email: user.email,
-          role: user.role,
+          role: effectiveRole,
+          isTemporaryAdmin: accountContext.isTemporaryAdmin,
+          isEmployeeAccount: accountContext.isEmployeeAccount,
         },
         token,
       },
@@ -124,11 +152,15 @@ exports.setPassword = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
+    const accountContext = await getEmployeeAccountContext(user.email);
+    const effectiveRole = accountContext.effectiveRole || user.role;
+
     user.password = password;
     user.passwordSet = true;
+    user.role = effectiveRole;
     await user.save();
 
-    const token = generateToken(user._id);
+    const token = generateToken(user);
 
     res.status(200).json({
       success: true,
@@ -137,7 +169,9 @@ exports.setPassword = async (req, res, next) => {
           id: user._id,
           name: user.name,
           email: user.email,
-          role: user.role,
+          role: effectiveRole,
+          isTemporaryAdmin: accountContext.isTemporaryAdmin,
+          isEmployeeAccount: accountContext.isEmployeeAccount,
         },
         token,
       },

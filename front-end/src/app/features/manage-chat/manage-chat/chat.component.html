@@ -1,0 +1,120 @@
+<div class="chat-shell">
+  <aside class="conversation-panel">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Conversations</p>
+        <h2>WhatsApp Inbox</h2>
+      </div>
+      <span class="conversation-count">{{ conversations.length }}</span>
+    </div>
+
+    <label class="search-box" aria-label="Search conversations">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input
+        type="text"
+        [(ngModel)]="searchTerm"
+        placeholder="Search phone number or message"
+      >
+    </label>
+
+    <div class="panel-state" *ngIf="isLoadingConversations && !conversations.length">
+      Loading conversations...
+    </div>
+
+    <div class="conversation-list" *ngIf="!isLoadingConversations || conversations.length">
+      <button
+        type="button"
+        class="conversation-card"
+        *ngFor="let conversation of filteredConversations; trackBy: trackConversation"
+        [class.active]="selectedConversation?._id === conversation._id"
+        (click)="selectConversation(conversation)"
+      >
+        <div class="avatar">{{ conversation.phoneNumber.slice(-2) }}</div>
+        <div class="conversation-copy">
+          <div class="conversation-row">
+            <h3>{{ conversation.phoneNumber }}</h3>
+            <time>{{ conversation.updatedAt | date:'shortTime' }}</time>
+          </div>
+          <p>{{ conversation.lastMessage || 'No messages yet' }}</p>
+        </div>
+      </button>
+
+      <div class="panel-state" *ngIf="!filteredConversations.length">
+        No conversations found.
+      </div>
+    </div>
+  </aside>
+
+  <section class="chat-panel" [class.empty]="!selectedConversation">
+    <ng-container *ngIf="selectedConversation; else emptyState">
+      <header class="chat-header">
+        <div class="chat-user">
+          <div class="avatar large">{{ selectedConversation.phoneNumber.slice(-2) }}</div>
+          <div>
+            <h3>{{ activeConversationTitle }}</h3>
+            <p>Conversation updates every 4 seconds</p>
+          </div>
+        </div>
+      </header>
+
+      <div class="message-stream" #messageScroller>
+        <div class="panel-state small" *ngIf="isLoadingMessages && !messages.length">
+          Loading messages...
+        </div>
+
+        <div class="panel-state small" *ngIf="!isLoadingMessages && !messages.length">
+          No messages in this conversation yet.
+        </div>
+
+        <div
+          class="message-row"
+          *ngFor="let message of messages; trackBy: trackMessage"
+          [class.outgoing]="message.direction === 'outgoing'"
+        >
+          <article class="bubble" [class.pending]="message.isPending">
+            <p>{{ message.text || (message.direction === 'outgoing' ? 'Outgoing status update' : 'Incoming message') }}</p>
+            <div class="mock-meta" *ngIf="message.metadata as meta">
+              <span class="meta-chip">{{ meta.sourceChannel }}</span>
+              <span class="meta-chip">{{ meta.campaign }}</span>
+              <span class="meta-chip">{{ meta.journeyStep }}</span>
+              <span class="meta-chip">{{ meta.tags.join(', ') }}</span>
+              <span class="meta-chip confidence">conf {{ meta.confidence }}</span>
+            </div>
+            <div class="meta-row">
+              <time>{{ message.timestamp | date:'shortTime' }}</time>
+              <span *ngIf="message.metadata as meta">{{ meta.payloadId }}</span>
+              <span class="status" *ngIf="message.direction === 'outgoing'">
+                {{ message.isPending ? 'sending' : message.status }}
+              </span>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <footer class="composer">
+        <div class="composer-input">
+          <textarea
+            [(ngModel)]="draftMessage"
+            rows="1"
+            placeholder="Type a message"
+            (keydown.enter)="$event.preventDefault(); sendMessage()"
+          ></textarea>
+        </div>
+        <button type="button" class="send-button" [disabled]="!canSend" (click)="sendMessage()">
+          <i class="fa-solid fa-paper-plane"></i>
+          <span>{{ isSending ? 'Sending...' : 'Send' }}</span>
+        </button>
+      </footer>
+    </ng-container>
+
+    <ng-template #emptyState>
+      <div class="empty-state">
+        <div class="empty-card">
+          <div class="empty-icon"><i class="fa-brands fa-whatsapp"></i></div>
+          <h3>Select a conversation</h3>
+          <p>Choose a customer thread to view messages and send replies.</p>
+        </div>
+      </div>
+    </ng-template>
+  </section>
+</div>

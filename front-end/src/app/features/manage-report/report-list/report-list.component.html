@@ -1,0 +1,70 @@
+<section class="report-list-shell">
+  <div class="toolbar">
+    <div class="left">
+      <h2>Manage Reports</h2>
+      <p>Create and manage professional invoice reports</p>
+    </div>
+    <button type="button" class="btn-primary" (click)="create.emit()">+ Create Report</button>
+  </div>
+
+  <div class="filters">
+    <input type="text" [(ngModel)]="searchTerm" placeholder="Search by client name or invoice number">
+
+    <select [(ngModel)]="statusFilter">
+      <option value="All">All Status</option>
+      <option value="Paid">Paid</option>
+      <option value="Pending">Pending</option>
+    </select>
+
+    <app-date-time-picker
+      [(ngModel)]="fromDate"
+      placeholder="From date and time">
+    </app-date-time-picker>
+
+    <app-date-time-picker
+      [(ngModel)]="toDate"
+      placeholder="To date and time">
+    </app-date-time-picker>
+  </div>
+
+  <div class="table-wrap" *ngIf="!loading; else loadingState">
+    <table>
+      <thead>
+        <tr>
+          <th>Invoice Number</th>
+          <th>Client Name</th>
+          <th>Date</th>
+          <th>Total Amount</th>
+          <th>Status</th>
+          <th class="actions-col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let report of filteredReports; trackBy: trackById">
+          <td>{{ report.invoiceNumber }}</td>
+          <td>{{ report.client.name }}</td>
+          <td>{{ report.date | date:'dd/MM/yyyy' }}</td>
+          <td>{{ report.total | number:'1.2-2' }}</td>
+          <td>
+            <span class="status" [class.paid]="report.status === 'Paid'" [class.pending]="report.status === 'Pending'">
+              {{ report.status }}
+            </span>
+          </td>
+          <td class="actions-col">
+            <button type="button" (click)="view.emit(report)">View</button>
+            <button type="button" (click)="download.emit(report)">Download</button>
+            <button type="button" (click)="edit.emit(report)">Edit</button>
+            <button type="button" class="delete" (click)="remove.emit(report)">Delete</button>
+          </td>
+        </tr>
+        <tr *ngIf="!filteredReports.length">
+          <td colspan="6" class="empty">No reports found for selected filters.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ng-template #loadingState>
+    <div class="loading">Loading reports...</div>
+  </ng-template>
+</section>

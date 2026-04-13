@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema(
     password: { type: String, minlength: 5, select: false },
     passwordSet: { type: Boolean, default: false },
     role: { type: String, enum: ['user', 'admin', 'Employee', 'Admin'], default: 'user' },
+    tokenVersion: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

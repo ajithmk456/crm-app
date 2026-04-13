@@ -11,6 +11,7 @@ import { EmployeeDashboardComponent } from './features/employee-dashboard/employ
 import { TaskRemindersComponent } from './features/task-reminders/task-reminders.component';
 import { ProfileComponent } from './features/profile/profile.component';
 import { ContactUsComponent } from './features/contact-us/contact-us.component';
+import { ManageReportComponent } from './features/manage-report/manage-report.component';
 import { AuthGuard } from './core/auth.guard';
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -24,7 +25,7 @@ export const routes: Routes = [
     canActivate: [AuthGuard],
     canActivateChild: [AuthGuard],
     children: [
-      { path: 'dashboard', component: DashboardComponent, data: { role: 'admin', breadcrumb: 'Dashboard' } },
+      { path: 'dashboard', component: DashboardComponent, data: { breadcrumb: 'Dashboard' } },
       { path: 'manage-employee', component: ManageEmployeeComponent, data: { role: 'admin', breadcrumb: 'Manage Employee' } },
       { path: 'manage-task', component: ManageTaskComponent, canActivate: [AuthGuard], data: { breadcrumb: 'Manage Task' } },
       { path: 'task-reminders', component: TaskRemindersComponent, canActivate: [AuthGuard], data: { breadcrumb: 'Task Reminders' } },
@@ -38,6 +39,11 @@ export const routes: Routes = [
         path: 'manage-bulk-message',
         component: ManageBulkMessageComponent,
         data: { role: 'admin', breadcrumb: 'Bulk Messaging' }
+      },
+      {
+        path: 'manage-report',
+        component: ManageReportComponent,
+        data: { role: 'admin', breadcrumb: 'Manage Report' }
       },
         {
         path: 'employee-dashboard',

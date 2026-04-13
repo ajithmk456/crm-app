@@ -22,21 +22,22 @@ export class AuthGuard implements CanActivate {
       return false;
     }
 
-    const userRole = this.getRoleFromSessionStorage();
-    if (!userRole) {
+    const sessionUser = this.getSessionUserAuth();
+    if (!sessionUser) {
       this.router.navigate(['/login']);
       return false;
     }
 
     const requiredRole = String(route.data['role'] || '').toLowerCase();
     if (requiredRole) {
-      if (requiredRole === 'admin' && userRole !== 'admin') {
-        this.redirectToDashboard(userRole);
+      if (requiredRole === 'admin' && sessionUser.role !== 'admin') {
+        this.redirectToDashboard(sessionUser.role);
         return false;
       }
 
-      if (requiredRole === 'employee' && userRole !== 'employee') {
-        this.redirectToDashboard(userRole);
+      const canAccessEmployeeRoute = sessionUser.role === 'employee' || sessionUser.isTemporaryAdmin;
+      if (requiredRole === 'employee' && !canAccessEmployeeRoute) {
+        this.redirectToDashboard(sessionUser.role);
         return false;
       }
     }
@@ -44,16 +45,17 @@ export class AuthGuard implements CanActivate {
     return true;
   }
 
-  private getRoleFromSessionStorage(): 'admin' | 'employee' | null {
+  private getSessionUserAuth(): { role: 'admin' | 'employee'; isTemporaryAdmin: boolean } | null {
     try {
       const raw = sessionStorage.getItem('user');
       if (!raw) return null;
 
       const user = JSON.parse(raw);
       const role = String(user?.role || '').toLowerCase();
+      const isTemporaryAdmin = !!user?.isTemporaryAdmin;
 
-      if (role === 'admin') return 'admin';
-      if (role === 'employee' || role === 'user') return 'employee';
+      if (role === 'admin') return { role: 'admin', isTemporaryAdmin };
+      if (role === 'employee' || role === 'user') return { role: 'employee', isTemporaryAdmin: false };
 
       return null;
     } catch {

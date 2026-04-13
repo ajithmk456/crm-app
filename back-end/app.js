@@ -13,14 +13,18 @@ const employeeRoutes = require('./routes/employeeRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const groupRoutes = require('./routes/groupRoutes');
 const messageRoutes = require('./routes/messageRoutes');
+const conversationRoutes = require('./routes/conversationRoutes');
+const webhookRoutes = require('./routes/webhookRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 connectDB();
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cors({ origin: '*' }));
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
@@ -61,8 +65,11 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/conversations', conversationRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/webhook', webhookRoutes);
 app.use(errorHandler);
 
 module.exports = app;

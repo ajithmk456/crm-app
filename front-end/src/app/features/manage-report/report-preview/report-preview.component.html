@@ -1,0 +1,79 @@
+<section class="invoice-preview" *ngIf="report as data">
+  <header class="invoice-header">
+    <div>
+      <h2>{{ company.name }}</h2>
+      <p>{{ company.address }}</p>
+      <p>GSTIN: {{ company.gst }}</p>
+      <p>State Name: {{ company.state }}</p>
+      <p>E-Mail: {{ company.email }}</p>
+    </div>
+    <div class="invoice-meta">
+      <h3>TAX INVOICE</h3>
+      <p>Invoice No: {{ data.invoiceNumber || 'Draft' }}</p>
+      <p>Date: {{ data.date | date:'dd/MM/yyyy' }}</p>
+      <p>Place of Supply: {{ data.placeOfSupply || '-' }}</p>
+      <p>Status: {{ data.status || 'Pending' }}</p>
+    </div>
+  </header>
+
+  <div class="client-grid">
+    <div>
+      <h4>Bill To</h4>
+      <p>{{ data.client?.name || '-' }}</p>
+      <p>{{ data.client?.address || '-' }}</p>
+      <p>GSTIN: {{ data.client?.gst || '-' }}</p>
+    </div>
+    <div>
+      <h4>Ship To</h4>
+      <p>{{ data.client?.name || '-' }}</p>
+      <p>{{ data.client?.address || '-' }}</p>
+      <p>GSTIN: {{ data.client?.gst || '-' }}</p>
+    </div>
+  </div>
+
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th>HSN/SAC</th>
+        <th class="amount">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let item of data.items || []">
+        <td>
+          <span>{{ item.description }}</span>
+          <em *ngIf="item.subDescription" class="sub-desc">{{ item.subDescription }}</em>
+        </td>
+        <td>{{ item.hsn }}</td>
+        <td class="amount">{{ item.amount | number:'1.2-2' }}</td>
+      </tr>
+      <tr *ngIf="!(data.items || []).length">
+        <td colspan="3" class="empty">Add service items to preview invoice.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="totals-card">
+    <div><span>Subtotal</span><strong>{{ subtotal | number:'1.2-2' }}</strong></div>
+    <div><span>CGST (9%)</span><strong>{{ cgst | number:'1.2-2' }}</strong></div>
+    <div><span>SGST (9%)</span><strong>{{ sgst | number:'1.2-2' }}</strong></div>
+    <div class="grand-total"><span>Total</span><strong>{{ total | number:'1.2-2' }}</strong></div>
+  </div>
+
+  <p class="amount-words"><strong>Amount in words:</strong> {{ amountInWords }}</p>
+
+  <div class="bottom-grid">
+    <div>
+      <h4>Bank Details</h4>
+      <p>Bank: {{ data.bankDetails?.bankName || '-' }}</p>
+      <p>A/C No: {{ data.bankDetails?.accountNumber || '-' }}</p>
+      <p>IFSC: {{ data.bankDetails?.ifsc || '-' }}</p>
+    </div>
+    <div>
+      <h4>Declaration</h4>
+      <p>{{ data.declaration || 'We declare that this invoice shows the actual price of the services described.' }}</p>
+      <p class="signature">Authorized Signatory</p>
+    </div>
+  </div>
+</section>

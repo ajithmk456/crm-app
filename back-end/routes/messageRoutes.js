@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { sendBulkMessage } = require('../controllers/messageController');
+const { sendBulkMessage, sendMessage, getMessages } = require('../controllers/messageController');
 const { protect } = require('../middleware/authMiddleware');
 const { authorizeRole } = require('../middleware/roleMiddleware');
 
@@ -44,5 +44,8 @@ const { authorizeRole } = require('../middleware/roleMiddleware');
  *         description: Bulk message summary
  */
 router.post('/bulk', protect, authorizeRole('admin'), sendBulkMessage);
+router.post('/send-bulk', protect, authorizeRole('admin'), sendBulkMessage);
+router.post('/send', protect, sendMessage);
+router.get('/', protect, getMessages);
 
 module.exports = router;

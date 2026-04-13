@@ -35,12 +35,19 @@ export class MainLayoutComponent implements OnInit {
     return this.userRole === 'admin';
   }
 
+  get isTemporaryAdmin(): boolean {
+    return this.isAdmin && !!this.currentUser?.isTemporaryAdmin;
+  }
+
   get isEmployee(): boolean {
     const role = this.userRole;
     return role === 'employee' || role === 'user';
   }
 
   get dashboardSubtitle(): string {
+    if (this.isTemporaryAdmin) {
+      return 'Secondary Admin';
+    }
     return this.isAdmin ? 'Admin Dashboard' : 'Employee Dashboard';
   }
 

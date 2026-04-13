@@ -63,6 +63,31 @@
           </div>
         </div>
 
+        <ng-container *ngIf="isAdmin">
+          <div class="section-title-row section-gap">
+            <div class="section-title no-margin">Company Bank Details</div>
+            <span class="admin-only-badge">Admin Only</span>
+          </div>
+          <p class="section-hint">These details are used as default in Manage Report.</p>
+
+          <div formGroupName="bankDetails" class="form-grid">
+            <div class="form-group">
+              <label>Bank Name</label>
+              <input formControlName="bankName" type="text" />
+            </div>
+
+            <div class="form-group">
+              <label>Account Number</label>
+              <input formControlName="accountNumber" type="text" />
+            </div>
+
+            <div class="form-group">
+              <label>IFSC Code</label>
+              <input formControlName="ifsc" type="text" />
+            </div>
+          </div>
+        </ng-container>
+
         <!-- Actions -->
         <div class="form-actions">
           <button type="submit" class="btn-save" [disabled]="saving">
