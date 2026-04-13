@@ -38,7 +38,7 @@ const swaggerOptions = {
       version: '1.0.0',
       description: 'Login authentication API with JWT and Swagger docs',
     },
-    servers: [{ url: 'http://localhost:' + (process.env.PORT || 5000) }],
+    servers: [{ url: 'http://localhost:' + (process.env.PORT || 3000) }],
     components: {
       securitySchemes: {
         bearerAuth: {
@@ -73,3 +73,4 @@ app.use('/webhook', webhookRoutes);
 app.use(errorHandler);
 
 module.exports = app;
+

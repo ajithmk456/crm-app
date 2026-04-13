@@ -1,7 +1,7 @@
 const app = require('./app');
 const { initializeReminders, cleanupAllReminders } = require('./services/reminderService');
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, async () => {
   console.log('Server running on http://localhost:' + PORT);
@@ -33,3 +33,4 @@ process.on('SIGINT', () => {
     process.exit(0);
   });
 });
+
