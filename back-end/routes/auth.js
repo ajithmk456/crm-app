@@ -1,6 +1,7 @@
 const express = require('express');
-const { login, updateProfile, checkUser, setPassword } = require('../controllers/authController');
+const { login, updateProfile, checkUser, setPassword, createAdmin } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
+const { authorizeRole } = require('../middleware/roleMiddleware');
 const router = express.Router();
 
 /**
@@ -64,5 +65,45 @@ router.post('/login', login);
 router.post('/check-user', checkUser);
 router.post('/set-password', setPassword);
 router.put('/profile', protect, updateProfile);
+
+/**
+ * @openapi
+ * /api/auth/admins:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     summary: Create an admin user
+ *     description: Accessible only to authenticated superadmin users.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - password
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Operations Admin
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: admin@example.com
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: StrongPass123
+ *     responses:
+ *       201:
+ *         description: Admin user created successfully
+ *       403:
+ *         description: Forbidden
+ */
+router.post('/admins', protect, authorizeRole('superadmin'), createAdmin);
 
 module.exports = router;

@@ -29,6 +29,20 @@ export class AuthGuard implements CanActivate {
     }
 
     const requiredRole = String(route.data['role'] || '').toLowerCase();
+    if (requiredRole === 'superadmin') {
+      if (sessionUser.role !== 'superadmin') {
+        this.redirectToDashboard(sessionUser.role);
+        return false;
+      }
+
+      return true;
+    }
+
+    if (sessionUser.role === 'superadmin') {
+      this.router.navigate(['/superadmin/create-admin']);
+      return false;
+    }
+
     if (requiredRole) {
       if (requiredRole === 'admin' && sessionUser.role !== 'admin') {
         this.redirectToDashboard(sessionUser.role);
@@ -45,7 +59,7 @@ export class AuthGuard implements CanActivate {
     return true;
   }
 
-  private getSessionUserAuth(): { role: 'admin' | 'employee'; isTemporaryAdmin: boolean } | null {
+  private getSessionUserAuth(): { role: 'admin' | 'employee' | 'superadmin'; isTemporaryAdmin: boolean } | null {
     try {
       const raw = sessionStorage.getItem('user');
       if (!raw) return null;
@@ -54,6 +68,7 @@ export class AuthGuard implements CanActivate {
       const role = String(user?.role || '').toLowerCase();
       const isTemporaryAdmin = !!user?.isTemporaryAdmin;
 
+      if (role === 'superadmin') return { role: 'superadmin', isTemporaryAdmin: false };
       if (role === 'admin') return { role: 'admin', isTemporaryAdmin };
       if (role === 'employee' || role === 'user') return { role: 'employee', isTemporaryAdmin: false };
 
@@ -63,9 +78,14 @@ export class AuthGuard implements CanActivate {
     }
   }
 
-  private redirectToDashboard(role: 'admin' | 'employee'): void {
+  private redirectToDashboard(role: 'admin' | 'employee' | 'superadmin'): void {
     if (role === 'admin') {
       this.router.navigate(['/dashboard']);
+      return;
+    }
+
+    if (role === 'superadmin') {
+      this.router.navigate(['/superadmin/create-admin']);
       return;
     }
 

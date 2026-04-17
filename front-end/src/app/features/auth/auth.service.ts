@@ -30,6 +30,25 @@ export interface SetPasswordRequest {
   password: string;
 }
 
+export interface CreateAdminRequest {
+  name: string;
+  email: string;
+  password: string;
+}
+
+export interface CreateAdminResponse {
+  success: boolean;
+  data?: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    isTemporaryAdmin?: boolean;
+    isEmployeeAccount?: boolean;
+  };
+  message?: string;
+}
+
 export interface ProfileBankDetails {
   bankName: string;
   accountNumber: string;
@@ -58,6 +77,10 @@ export class AuthService {
 
   setPassword(email: string, password: string): Observable<LoginResponse> {
     return this.http.post<LoginResponse>('/api/auth/set-password', { email, password });
+  }
+
+  createAdmin(payload: CreateAdminRequest): Observable<CreateAdminResponse> {
+    return this.http.post<CreateAdminResponse>('/api/auth/admins', payload);
   }
 
   setToken(token: string): void {
@@ -101,6 +124,10 @@ export class AuthService {
   getUserRole(): string {
     const user = this.getUser();
     return (user?.role || 'user').toLowerCase();
+  }
+
+  isSuperadmin(): boolean {
+    return this.getUserRole() === 'superadmin';
   }
 
   isAdmin(): boolean {

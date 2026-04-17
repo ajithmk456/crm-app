@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Employee = require('../models/Employee');
+const { normalizeRole } = require('../utils/roles');
 
 const generateToken = (user) => {
   return jwt.sign({ id: user._id, tokenVersion: user.tokenVersion || 0 }, process.env.JWT_SECRET, { expiresIn: '24h' });
@@ -21,9 +21,18 @@ const getEmployeeAccountContext = async (email) => {
   return {
     isEmployeeAccount: true,
     isTemporaryAdmin: normalizedEmployeeRole === 'admin',
-    effectiveRole: normalizedEmployeeRole === 'admin' ? 'Admin' : 'Employee',
+    effectiveRole: normalizedEmployeeRole === 'admin' ? 'admin' : 'user',
   };
 };
+
+const serializeUser = (user, accountContext = {}) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  role: normalizeRole(accountContext.effectiveRole || user.role),
+  isTemporaryAdmin: !!accountContext.isTemporaryAdmin,
+  isEmployeeAccount: !!accountContext.isEmployeeAccount,
+});
 
 exports.login = async (req, res, next) => {
   try {
@@ -49,7 +58,7 @@ exports.login = async (req, res, next) => {
     }
 
     const accountContext = await getEmployeeAccountContext(user.email);
-    const effectiveRole = accountContext.effectiveRole || user.role;
+    const effectiveRole = normalizeRole(accountContext.effectiveRole || user.role);
     if (effectiveRole !== user.role) {
       user.role = effectiveRole;
       await user.save();
@@ -60,14 +69,7 @@ exports.login = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          role: effectiveRole,
-          isTemporaryAdmin: accountContext.isTemporaryAdmin,
-          isEmployeeAccount: accountContext.isEmployeeAccount,
-        },
+        user: serializeUser(user, accountContext),
         token,
       },
     });
@@ -105,7 +107,7 @@ exports.updateProfile = async (req, res, next) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        role: normalizeRole(user.role),
       },
     });
   } catch (error) {
@@ -153,7 +155,7 @@ exports.setPassword = async (req, res, next) => {
     }
 
     const accountContext = await getEmployeeAccountContext(user.email);
-    const effectiveRole = accountContext.effectiveRole || user.role;
+    const effectiveRole = normalizeRole(accountContext.effectiveRole || user.role);
 
     user.password = password;
     user.passwordSet = true;
@@ -165,16 +167,47 @@ exports.setPassword = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          role: effectiveRole,
-          isTemporaryAdmin: accountContext.isTemporaryAdmin,
-          isEmployeeAccount: accountContext.isEmployeeAccount,
-        },
+        user: serializeUser(user, accountContext),
         token,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.createAdmin = async (req, res, next) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ success: false, message: 'Name is required.' });
+    }
+
+    if (!email || !String(email).trim()) {
+      return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+
+    if (!password || String(password).length < 8) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      return res.status(409).json({ success: false, message: 'A user with this email already exists.' });
+    }
+
+    const adminUser = await User.create({
+      name: String(name).trim(),
+      email: normalizedEmail,
+      password: String(password),
+      role: 'admin',
+    });
+
+    res.status(201).json({
+      success: true,
+      data: serializeUser(adminUser),
     });
   } catch (error) {
     next(error);

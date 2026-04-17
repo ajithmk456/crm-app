@@ -1,5 +1,10 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { normalizeRole } = require('../utils/roles');
+
+const isAllowedSuperadminRequest = (req) => {
+  return req.method === 'POST' && req.baseUrl === '/api/auth' && req.path === '/admins';
+};
 
 const protect = async (req, res, next) => {
   let token;
@@ -21,6 +26,15 @@ const protect = async (req, res, next) => {
     const tokenVersion = Number(decoded.tokenVersion || 0);
     if (tokenVersion !== Number(user.tokenVersion || 0)) {
       return res.status(401).json({ success: false, message: 'Session expired. Please login again.' });
+    }
+
+    user.role = normalizeRole(user.role);
+
+    if (user.role === 'superadmin' && !isAllowedSuperadminRequest(req)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Superadmin access is restricted to admin creation only.',
+      });
     }
 
     req.user = user;

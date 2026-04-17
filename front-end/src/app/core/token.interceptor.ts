@@ -3,16 +3,20 @@ import { HttpEvent, HttpHandler, HttpInterceptor, HttpRequest } from '@angular/c
 import { Observable } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { throwError } from 'rxjs';
-import { environment } from '../../environments/environment';
 import { Router } from '@angular/router';
 import { AuthService } from '../features/auth/auth.service';
+import { RuntimeConfigService } from './runtime-config.service';
 
 @Injectable()
 export class TokenInterceptor implements HttpInterceptor {
-  constructor(private readonly authService: AuthService, private readonly router: Router) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly router: Router,
+    private readonly runtimeConfigService: RuntimeConfigService,
+  ) {}
 
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
-    const apiBaseUrl = environment.apiBaseUrl?.replace(/\/$/, '') || '';
+    const apiBaseUrl = this.runtimeConfigService.getApiBaseUrl().replace(/\/$/, '');
     const requestUrl = req.url.startsWith('/api') && apiBaseUrl
       ? `${apiBaseUrl}${req.url}`
       : req.url;

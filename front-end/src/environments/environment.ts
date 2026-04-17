@@ -1,4 +1,4 @@
 export const environment = {
   production: false,
-  apiBaseUrl: 'https://api.mukundhaassociates.com'
+  apiBaseUrl: 'http://localhost:5000'
 };

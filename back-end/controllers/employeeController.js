@@ -2,7 +2,7 @@ const Employee = require('../models/Employee');
 const User = require('../models/User');
 
 const getAuthRoleFromEmployeeRole = (employeeRole) => {
-  return String(employeeRole || '').toLowerCase() === 'admin' ? 'Admin' : 'Employee';
+  return String(employeeRole || '').toLowerCase() === 'admin' ? 'admin' : 'user';
 };
 
 exports.addEmployee = async (req, res, next) => {
@@ -152,7 +152,7 @@ exports.deleteEmployee = async (req, res, next) => {
 
     await User.findOneAndDelete({
       email: employee.email.toLowerCase(),
-      role: { $in: ['Employee', 'employee', 'Admin', 'admin', 'user'] },
+      role: { $in: ['admin', 'user', 'Admin', 'Employee', 'employee'] },
     });
 
     res.status(200).json({ success: true, message: 'Employee deleted successfully' });

@@ -115,10 +115,8 @@ export class LoginComponent {
           this.authService.setToken(response.data.token);
           if (response.data.user) {
             this.authService.saveUser(response.data.user);
-            this.router.navigate(['/dashboard']);
-          } else {
-            this.router.navigate(['/dashboard']);
           }
+          this.router.navigate([this.getPostLoginRoute(response.data.user)]);
         } else {
           this.errorMessage = response?.message || 'Login failed. Please try again.';
         }
@@ -157,10 +155,8 @@ export class LoginComponent {
           this.authService.setToken(response.data.token);
           if (response.data.user) {
             this.authService.saveUser(response.data.user);
-            this.router.navigate(['/dashboard']);
-          } else {
-            this.router.navigate(['/dashboard']);
           }
+          this.router.navigate([this.getPostLoginRoute(response.data.user)]);
         } else {
           this.errorMessage = response?.message || 'Failed to set password. Please try again.';
         }
@@ -184,6 +180,12 @@ export class LoginComponent {
       this.passwordForm.reset();
       this.setPasswordForm.reset();
     }
+  }
+
+  private getPostLoginRoute(user: any): string {
+    return String(user?.role || '').toLowerCase() === 'superadmin'
+      ? '/superadmin/create-admin'
+      : '/dashboard';
   }
 
   private passwordMatchValidator(group: any): { [key: string]: any } | null {

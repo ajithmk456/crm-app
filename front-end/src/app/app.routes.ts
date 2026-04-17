@@ -12,12 +12,14 @@ import { TaskRemindersComponent } from './features/task-reminders/task-reminders
 import { ProfileComponent } from './features/profile/profile.component';
 import { ContactUsComponent } from './features/contact-us/contact-us.component';
 import { ManageReportComponent } from './features/manage-report/manage-report.component';
+import { SuperadminCreateAdminComponent } from './features/superadmin-create-admin/superadmin-create-admin.component';
 import { AuthGuard } from './core/auth.guard';
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
 
   { path: 'login', component: LoginComponent },
   { path: 'contact-us', component: ContactUsComponent },
+  { path: 'superadmin/create-admin', component: SuperadminCreateAdminComponent },
 
   {
     path: '',
