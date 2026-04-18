@@ -17,7 +17,7 @@ interface ContactResponse {
   styleUrl: './contact-us.component.scss'
 })
 export class ContactUsComponent {
-  readonly adminPhone = '+91 9876543210';
+  readonly adminPhone = '+91 85081 69948';
   submitting = false;
 
   readonly contactForm = this.fb.group({
