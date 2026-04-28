@@ -110,12 +110,44 @@ const getMessagesByPhone = (phone) => {
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 };
 
+const getConversationSummaries = () => {
+  const byPhone = new Map();
+
+  for (const message of chatMessages) {
+    const phone = normalizePhone(message.phone || message.source || message.destination);
+    if (!phone) {
+      continue;
+    }
+
+    const existing = byPhone.get(phone);
+    if (!existing) {
+      byPhone.set(phone, {
+        _id: phone,
+        phoneNumber: phone,
+        lastMessage: message.text || '',
+        updatedAt: new Date(message.timestamp || new Date()),
+      });
+      continue;
+    }
+
+    const existingTime = new Date(existing.updatedAt).getTime();
+    const currentTime = new Date(message.timestamp || new Date()).getTime();
+    if (currentTime >= existingTime) {
+      existing.lastMessage = message.text || existing.lastMessage;
+      existing.updatedAt = new Date(message.timestamp || new Date());
+    }
+  }
+
+  return Array.from(byPhone.values()).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+};
+
 module.exports = {
   normalizePhone,
   normalizeStatus,
   saveMessage,
   updateMessageStatus,
   getMessagesByPhone,
+  getConversationSummaries,
   // Exposed only for temporary debugging/testing.
   chatMessages,
 };

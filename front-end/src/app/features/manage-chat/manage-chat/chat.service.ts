@@ -1,6 +1,6 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
 
 export interface ChatConversation {
@@ -20,7 +20,7 @@ export interface ChatMessage {
   text: string;
   type: string;
   direction: 'incoming' | 'outgoing';
-  status: 'sent' | 'delivered' | 'read';
+  status: 'sent' | 'delivered' | 'read' | 'failed';
   timestamp: string;
   replyTo?: string;
   metadata?: ChatMessageMetadata;
@@ -81,16 +81,36 @@ export class ChatService {
   }
 
   getConversations(): Observable<ApiListResponse<ChatConversation[]>> {
-    return this.http.get<ApiListResponse<ChatConversation[]>>('/api/conversations');
+    return this.http.get<ApiListResponse<ChatConversation[]>>('/api/chat/conversations');
   }
 
   getMessages(conversationId: string): Observable<ApiListResponse<ChatMessage[]>> {
-    const params = new HttpParams().set('conversationId', conversationId);
-    return this.http.get<ApiListResponse<ChatMessage[]>>('/api/messages', { params });
+    return this.http.get<ApiListResponse<any[]>>(`/api/chat/${encodeURIComponent(conversationId)}`).pipe(
+      map((response) => ({
+        ...response,
+        data: (response.data || []).map((item) => {
+          const isIncoming = String(item.direction || '').toLowerCase() === 'in';
+          const phone = String(item.phone || conversationId);
+
+          return {
+            _id: item.messageId,
+            messageId: item.messageId,
+            conversationId,
+            from: isIncoming ? phone : 'business',
+            to: isIncoming ? 'business' : phone,
+            text: item.text || '',
+            type: 'text',
+            direction: isIncoming ? 'incoming' : 'outgoing',
+            status: item.status || 'sent',
+            timestamp: item.timestamp,
+          } satisfies ChatMessage;
+        }),
+      }))
+    );
   }
 
   sendMessage(data: SendMessageRequest): Observable<SendMessageResponse> {
-    return this.http.post<SendMessageResponse>('/api/messages/send', data);
+    return this.http.post<SendMessageResponse>('/api/chat/send', data);
   }
 
   onRealtimeUpdates(): Observable<RealtimeChatEvent> {

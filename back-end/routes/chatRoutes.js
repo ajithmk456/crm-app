@@ -1,5 +1,5 @@
 const express = require('express');
-const { sendChatMessage, getChatByPhone } = require('../controllers/chatController');
+const { sendChatMessage, getChatByPhone, getChatConversations } = require('../controllers/chatController');
 
 const router = express.Router();
 
@@ -44,6 +44,21 @@ const router = express.Router();
 
 // Sends outbound WhatsApp message through Gupshup.
 router.post('/send', sendChatMessage);
+
+/**
+ * @openapi
+ * /api/chat/conversations:
+ *   get:
+ *     tags:
+ *       - Chat
+ *     summary: Get chat conversation list
+ *     responses:
+ *       200:
+ *         description: Conversation summaries
+ */
+
+// Fetches conversation list for chat sidebar.
+router.get('/conversations', getChatConversations);
 
 /**
  * @openapi

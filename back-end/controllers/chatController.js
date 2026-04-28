@@ -3,6 +3,7 @@ const {
   saveMessage,
   updateMessageStatus,
   getMessagesByPhone,
+  getConversationSummaries,
   normalizePhone,
   normalizeStatus,
 } = require('../services/chatMessageStore');
@@ -137,6 +138,24 @@ exports.getChatByPhone = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: messages,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/chat/conversations
+// Returns chat conversation summaries for sidebar listing.
+exports.getChatConversations = async (req, res, next) => {
+  try {
+    const conversations = getConversationSummaries().map((item) => ({
+      ...item,
+      updatedAt: new Date(item.updatedAt).toISOString(),
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: conversations,
     });
   } catch (error) {
     next(error);
