@@ -49,11 +49,18 @@ const saveMessage = (message) => {
   if (normalized.messageId) {
     const existingIndex = chatMessages.findIndex((item) => item.messageId === normalized.messageId);
     if (existingIndex !== -1) {
+      const existing = chatMessages[existingIndex];
       chatMessages[existingIndex] = {
-        ...chatMessages[existingIndex],
+        ...existing,
         ...normalized,
+        // Preserve key fields when webhook payload omits or sends blank values.
+        phone: normalized.phone || existing.phone,
+        source: normalized.source || existing.source,
+        destination: normalized.destination || existing.destination,
+        direction: normalized.direction || existing.direction,
+        status: normalized.status || existing.status,
         // Preserve existing text when a status event has no text.
-        text: normalized.text || chatMessages[existingIndex].text,
+        text: normalized.text || existing.text,
       };
       return chatMessages[existingIndex];
     }

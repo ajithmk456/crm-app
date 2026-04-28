@@ -56,6 +56,7 @@ exports.sendChatMessage = async (req, res, next) => {
 exports.processGupshupWebhook = (body) => {
   const payload = body?.payload || {};
   const eventType = String(body?.type || '').toLowerCase();
+  const businessSource = normalizePhone(process.env.GUPSHUP_SOURCE || '');
 
   const messageId = payload.id || payload.messageId || payload.gsId || payload.message_id || '';
   const destination = normalizePhone(payload.destination || payload.to);
@@ -63,6 +64,8 @@ exports.processGupshupWebhook = (body) => {
   const status = normalizeStatus(payload.status, 'sent');
   const text = payload.text || payload.body || payload.message || '';
   const reason = payload.reason || '';
+  const isFromBusiness = Boolean(businessSource && source && source === businessSource);
+  const phone = isFromBusiness ? destination : (source || destination);
 
   const isStatusUpdate = Boolean(payload.status);
   const isIncomingEvent = eventType.includes('message') || (!isStatusUpdate && Boolean(text));
@@ -92,9 +95,9 @@ exports.processGupshupWebhook = (body) => {
   if (isIncomingEvent) {
     const saved = saveMessage({
       messageId: messageId || `incoming-${Date.now()}`,
-      phone: source,
+      phone,
       text,
-      direction: 'in',
+      direction: isFromBusiness ? 'out' : 'in',
       status: 'sent',
       timestamp: payload.timestamp || new Date(),
       source,
