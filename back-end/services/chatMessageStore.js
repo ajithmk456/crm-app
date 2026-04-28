@@ -33,6 +33,44 @@ const toDate = (value) => {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 };
 
+const findBestOutgoingMatch = ({ phone, timestamp }) => {
+  if (!phone) {
+    return null;
+  }
+
+  const statusTime = toDate(timestamp).getTime();
+  const windowMs = 15 * 60 * 1000;
+  let best = null;
+  let bestDelta = Number.MAX_SAFE_INTEGER;
+
+  for (const item of chatMessages) {
+    if (item.direction !== 'out') {
+      continue;
+    }
+
+    const hasText = Boolean(String(item.text || '').trim());
+    if (!hasText) {
+      continue;
+    }
+
+    const samePhone = item.phone === phone || item.destination === phone || item.source === phone;
+    if (!samePhone) {
+      continue;
+    }
+
+    const itemTime = toDate(item.timestamp).getTime();
+    const delta = Math.abs(statusTime - itemTime);
+    if (delta > windowMs || delta >= bestDelta) {
+      continue;
+    }
+
+    best = item;
+    bestDelta = delta;
+  }
+
+  return best;
+};
+
 const saveMessage = (message) => {
   const normalized = {
     messageId: message.messageId || '',
@@ -76,6 +114,7 @@ const updateMessageStatus = ({ messageId, status, destination, source, timestamp
   const normalizedDestination = normalizePhone(destination);
   const normalizedSource = normalizePhone(source);
   const normalizedStatus = normalizeStatus(status, 'sent');
+  const targetPhone = normalizedDestination || normalizedSource;
 
   if (!normalizedMessageId) {
     return null;
@@ -94,10 +133,28 @@ const updateMessageStatus = ({ messageId, status, destination, source, timestamp
     return existing;
   }
 
+  // Gupshup can send different IDs for status callbacks than send responses.
+  // Match by phone + timestamp window so one outgoing bubble progresses sent/delivered/read.
+  const matchedOutgoing = findBestOutgoingMatch({
+    phone: targetPhone,
+    timestamp,
+  });
+  if (matchedOutgoing) {
+    matchedOutgoing.status = normalizedStatus;
+    matchedOutgoing.timestamp = toDate(timestamp);
+    matchedOutgoing.destination = normalizedDestination || matchedOutgoing.destination;
+    matchedOutgoing.source = normalizedSource || matchedOutgoing.source;
+    matchedOutgoing.phone = matchedOutgoing.phone || targetPhone;
+    if (reason) {
+      matchedOutgoing.reason = String(reason);
+    }
+    return matchedOutgoing;
+  }
+
   // If we receive a status before the send API response is stored, create a fallback message.
   const fallback = {
     messageId: normalizedMessageId,
-    phone: normalizedDestination || normalizedSource,
+    phone: targetPhone,
     text: '',
     direction: 'out',
     status: normalizedStatus,
