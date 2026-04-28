@@ -28,6 +28,10 @@ const normalizeAttachmentFilename = (value) => {
   return raw.replace(/[^a-zA-Z0-9._-]/g, '_');
 };
 
+const isImageMimeType = (value) => String(value || '').toLowerCase().startsWith('image/');
+
+const isImageFileName = (value) => /\.(png|jpe?g|gif|webp)$/i.test(String(value || ''));
+
 const extractMessageId = (responseBody) => {
   if (!responseBody || typeof responseBody !== 'object') {
     return '';
@@ -91,7 +95,7 @@ const sendGupshupTextMessage = async ({ to, message }) => {
   return sendGupshupMessage(form);
 };
 
-const sendGupshupFileMessage = async ({ to, fileUrl, filename }) => {
+const sendGupshupFileMessage = async ({ to, fileUrl, filename, mimeType }) => {
   const destination = normalizeDestination(to);
   if (!destination) {
     throw new Error('A valid destination number is required.');
@@ -102,15 +106,28 @@ const sendGupshupFileMessage = async ({ to, fileUrl, filename }) => {
   }
 
   const providerFilename = normalizeAttachmentFilename(filename);
+  const shouldSendAsImage = isImageMimeType(mimeType) || isImageFileName(providerFilename);
+
+  const messagePayload = shouldSendAsImage
+    ? {
+      type: 'image',
+      originalUrl: String(fileUrl),
+      previewUrl: String(fileUrl),
+      caption: providerFilename,
+    }
+    : {
+      type: 'file',
+      // Keep both `url` and `file.link` for provider compatibility.
+      url: String(fileUrl),
+      filename: providerFilename,
+      file: {
+        link: String(fileUrl),
+        filename: providerFilename,
+      },
+    };
 
   const form = buildBaseForm(destination);
-  form.append('message', JSON.stringify({
-    type: 'file',
-    file: {
-      link: String(fileUrl),
-      filename: providerFilename,
-    },
-  }));
+  form.append('message', JSON.stringify(messagePayload));
 
   return sendGupshupMessage(form);
 };

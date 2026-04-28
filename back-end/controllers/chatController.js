@@ -75,7 +75,12 @@ exports.sendChatFile = async (req, res, next) => {
       });
     }
 
-    const result = await sendGupshupFileMessage({ to, fileUrl: normalizedFileUrl, filename });
+    const result = await sendGupshupFileMessage({
+      to,
+      fileUrl: normalizedFileUrl,
+      filename,
+      mimeType: mimeType || '',
+    });
     const messageId = result.messageId || `local-file-${Date.now()}`;
 
     saveMessage({
@@ -154,6 +159,8 @@ exports.processGupshupWebhook = (body) => {
       context.from
   );
   const status = normalizeStatus(rawStatus, 'sent');
+  const normalizedPayloadType = String(payloadType || '').toLowerCase();
+  const isMediaType = Boolean(normalizedPayloadType && normalizedPayloadType !== 'text');
   const text =
     payload.text ||
     payload.body ||
@@ -166,9 +173,16 @@ exports.processGupshupWebhook = (body) => {
   const attachmentUrl =
     payload.url ||
     payload.link ||
+    payload.originalUrl ||
+    payload.previewUrl ||
+    payload?.file?.link ||
+    payload?.file?.url ||
     nestedPayload.url ||
     nestedPayload.link ||
+    nestedPayload.originalUrl ||
+    nestedPayload.previewUrl ||
     nestedPayload?.file?.link ||
+    nestedPayload?.file?.url ||
     '';
   const attachmentFilename =
     payload.filename ||
@@ -186,6 +200,7 @@ exports.processGupshupWebhook = (body) => {
   const messageType = String(
     payload.type || nestedPayload.type || (attachmentUrl ? 'file' : 'text')
   ).toLowerCase();
+  const displayText = text || attachmentFilename || (isMediaType ? normalizedPayloadType : '');
   const reason = payload.reason || nestedPayload.reason || '';
   const eventTimestamp = payload.timestamp || nestedPayload.timestamp || new Date();
   const isFromBusiness = Boolean(
@@ -194,8 +209,8 @@ exports.processGupshupWebhook = (body) => {
   );
   const phone = isFromBusiness ? destination : (source || destination);
 
-  const isStatusUpdate = Boolean(payload.status || nestedPayload.status || hasExplicitStatus || (!String(text || '').trim() && payloadType !== 'text'));
-  const isIncomingEvent = eventType.includes('message') || (!isStatusUpdate && Boolean(text));
+  const isStatusUpdate = Boolean(payload.status || nestedPayload.status || hasExplicitStatus);
+  const isIncomingEvent = eventType.includes('message') || (!isStatusUpdate && (Boolean(displayText) || isMediaType || Boolean(attachmentUrl)));
 
   if (isStatusUpdate) {
     const updated = updateMessageStatus({
@@ -229,8 +244,8 @@ exports.processGupshupWebhook = (body) => {
     const saved = saveMessage({
       messageId: messageId || `incoming-${Date.now()}`,
       phone,
-      text: text || attachmentFilename,
-      type: messageType,
+      text: displayText,
+      type: messageType === 'text' ? 'text' : 'file',
       fileUrl: attachmentUrl,
       filename: attachmentFilename,
       mimeType: attachmentMimeType,
