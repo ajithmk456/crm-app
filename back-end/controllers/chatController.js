@@ -55,16 +55,43 @@ exports.sendChatMessage = async (req, res, next) => {
 // Normalizes and stores incoming/status events from Gupshup webhook payload.
 exports.processGupshupWebhook = (body) => {
   const payload = body?.payload || {};
+  const nestedPayload = payload?.payload || {};
+  const sender = payload?.sender || {};
+  const context = payload?.context || {};
   const eventType = String(body?.type || '').toLowerCase();
   const businessSource = normalizePhone(process.env.GUPSHUP_SOURCE || '916384322139');
 
   const messageId = payload.id || payload.messageId || payload.gsId || payload.message_id || '';
-  const destination = normalizePhone(payload.destination || payload.to);
-  const source = normalizePhone(payload.source || payload.from);
+  const destination = normalizePhone(
+    payload.destination ||
+      payload.to ||
+      context.destination ||
+      context.to ||
+      context.phone
+  );
+  const source = normalizePhone(
+    payload.source ||
+      payload.from ||
+      sender.phone ||
+      sender.id ||
+      context.source ||
+      context.from
+  );
   const status = normalizeStatus(payload.status, 'sent');
-  const text = payload.text || payload.body || payload.message || '';
+  const text =
+    payload.text ||
+    payload.body ||
+    payload.message ||
+    nestedPayload.text ||
+    nestedPayload.body ||
+    nestedPayload.message ||
+    nestedPayload.caption ||
+    '';
   const reason = payload.reason || '';
-  const isFromBusiness = Boolean(businessSource && source && source === businessSource);
+  const isFromBusiness = Boolean(
+    businessSource &&
+      ((source && source === businessSource) || (destination && destination !== businessSource && source === businessSource))
+  );
   const phone = isFromBusiness ? destination : (source || destination);
 
   const isStatusUpdate = Boolean(payload.status);
@@ -93,6 +120,11 @@ exports.processGupshupWebhook = (body) => {
   }
 
   if (isIncomingEvent) {
+    // Ignore non-status events that have no text and no usable phone fields.
+    if (!String(text || '').trim() && !source && !destination) {
+      return null;
+    }
+
     const saved = saveMessage({
       messageId: messageId || `incoming-${Date.now()}`,
       phone,
