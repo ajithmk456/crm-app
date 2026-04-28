@@ -118,10 +118,12 @@ export class ChatService {
         data: (response.data || []).reduce<ChatMessage[]>((acc, item) => {
           const normalizedText = String(item.text || '').trim();
           const fileUrl = String(item.fileUrl || item.url || '').trim();
-          const filename = String(item.filename || '').trim();
-          const mimeType = String(item.mimeType || '').trim();
+          const inferredNameFromUrl = fileUrl ? decodeURIComponent(fileUrl.split('?')[0].split('/').pop() || '') : '';
+          const filename = String(item.filename || inferredNameFromUrl || '').trim();
+          const mimeType = String(item.mimeType || item.mimetype || '').trim();
           const rawType = String(item.type || 'text').toLowerCase();
-          const isFileMessage = rawType === 'file' || Boolean(fileUrl || filename);
+          const looksLikeMediaText = ['image', 'document', 'video', 'audio', 'file', 'sticker'].includes(normalizedText.toLowerCase());
+          const isFileMessage = rawType === 'file' || Boolean(fileUrl || filename || looksLikeMediaText);
 
           if (!normalizedText && !isFileMessage) {
             return acc;
@@ -138,10 +140,10 @@ export class ChatService {
             conversationId,
             from: isIncoming ? phone : 'business',
             to: isIncoming ? 'business' : phone,
-            text: normalizedText || filename || 'Attachment',
+            text: normalizedText || filename || inferredNameFromUrl || 'Attachment',
             type: isFileMessage ? 'file' : 'text',
             fileUrl: fileUrl || undefined,
-            filename: filename || undefined,
+            filename: (filename || normalizedText || inferredNameFromUrl) || undefined,
             mimeType: mimeType || undefined,
             direction: isIncoming ? 'incoming' : 'outgoing',
             status: (['sent', 'delivered', 'read', 'failed'].includes(normalizedStatus) ? normalizedStatus : 'sent') as ChatMessage['status'],

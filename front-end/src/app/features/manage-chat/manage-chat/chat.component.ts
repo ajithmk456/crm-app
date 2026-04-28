@@ -407,7 +407,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const fileName = String(message.filename || '').toLowerCase();
     const mimeType = String(message.mimeType || '').toLowerCase();
-    return mimeType.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(fileName);
+    const fileUrl = String(message.fileUrl || '').toLowerCase();
+    const fallbackText = String(message.text || '').toLowerCase();
+    return (
+      mimeType.startsWith('image/')
+      || /\.(png|jpe?g|gif|webp)$/i.test(fileName)
+      || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(fileUrl)
+      || fallbackText === 'image'
+    );
   }
 
   canRetryMessage(message: PendingMessage): boolean {
