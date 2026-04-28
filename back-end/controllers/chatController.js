@@ -129,6 +129,11 @@ exports.processGupshupWebhook = (body) => {
   const rawStatus = payload.status || nestedPayload.status || payload.eventType || nestedPayload.eventType || payloadType;
   const hasExplicitStatus = ['sent', 'submitted', 'enqueued', 'queued', 'delivered', 'read', 'failed'].includes(String(rawStatus || '').toLowerCase());
 
+  const payloadImage = payload.image || nestedPayload.image || {};
+  const payloadDocument = payload.document || nestedPayload.document || {};
+  const payloadMedia = payload.media || nestedPayload.media || {};
+  const payloadFile = payload.file || nestedPayload.file || {};
+
   const messageId =
     payload.id ||
     payload.messageId ||
@@ -175,31 +180,90 @@ exports.processGupshupWebhook = (body) => {
     payload.link ||
     payload.originalUrl ||
     payload.previewUrl ||
+    payloadImage.url ||
+    payloadImage.link ||
+    payloadImage.originalUrl ||
+    payloadImage.previewUrl ||
+    payloadDocument.url ||
+    payloadDocument.link ||
+    payloadDocument.originalUrl ||
+    payloadDocument.previewUrl ||
+    payloadMedia.url ||
+    payloadMedia.link ||
+    payloadMedia.originalUrl ||
+    payloadMedia.previewUrl ||
+    payloadFile.url ||
+    payloadFile.link ||
+    payloadFile.originalUrl ||
+    payloadFile.previewUrl ||
     payload?.file?.link ||
     payload?.file?.url ||
     nestedPayload.url ||
     nestedPayload.link ||
     nestedPayload.originalUrl ||
     nestedPayload.previewUrl ||
+    nestedPayload?.image?.url ||
+    nestedPayload?.image?.link ||
+    nestedPayload?.image?.originalUrl ||
+    nestedPayload?.image?.previewUrl ||
+    nestedPayload?.document?.url ||
+    nestedPayload?.document?.link ||
+    nestedPayload?.document?.originalUrl ||
+    nestedPayload?.document?.previewUrl ||
+    nestedPayload?.media?.url ||
+    nestedPayload?.media?.link ||
+    nestedPayload?.media?.originalUrl ||
+    nestedPayload?.media?.previewUrl ||
     nestedPayload?.file?.link ||
     nestedPayload?.file?.url ||
     '';
   const attachmentFilename =
     payload.filename ||
+    payloadImage.filename ||
+    payloadDocument.filename ||
+    payloadMedia.filename ||
+    payloadFile.filename ||
+    payloadImage.caption ||
+    payloadDocument.caption ||
     nestedPayload.filename ||
+    nestedPayload?.image?.filename ||
+    nestedPayload?.document?.filename ||
+    nestedPayload?.media?.filename ||
     nestedPayload?.file?.filename ||
     '';
   const attachmentMimeType =
     payload.mimeType ||
     payload.mimetype ||
+    payloadImage.mimeType ||
+    payloadImage.mimetype ||
+    payloadImage.contentType ||
+    payloadDocument.mimeType ||
+    payloadDocument.mimetype ||
+    payloadDocument.contentType ||
+    payloadMedia.mimeType ||
+    payloadMedia.mimetype ||
+    payloadMedia.contentType ||
+    payloadFile.mimeType ||
+    payloadFile.mimetype ||
+    payloadFile.contentType ||
     nestedPayload.mimeType ||
     nestedPayload.mimetype ||
+    nestedPayload?.image?.mimeType ||
+    nestedPayload?.image?.mimetype ||
+    nestedPayload?.image?.contentType ||
+    nestedPayload?.document?.mimeType ||
+    nestedPayload?.document?.mimetype ||
+    nestedPayload?.document?.contentType ||
+    nestedPayload?.media?.mimeType ||
+    nestedPayload?.media?.mimetype ||
+    nestedPayload?.media?.contentType ||
     nestedPayload?.file?.mimeType ||
     nestedPayload?.file?.mimetype ||
     '';
   const messageType = String(
     payload.type || nestedPayload.type || (attachmentUrl ? 'file' : 'text')
   ).toLowerCase();
+  const isKnownMediaType = ['image', 'file', 'document', 'video', 'audio', 'sticker'].includes(messageType);
   const displayText = text || attachmentFilename || (isMediaType ? normalizedPayloadType : '');
   const reason = payload.reason || nestedPayload.reason || '';
   const eventTimestamp = payload.timestamp || nestedPayload.timestamp || new Date();
@@ -245,7 +309,7 @@ exports.processGupshupWebhook = (body) => {
       messageId: messageId || `incoming-${Date.now()}`,
       phone,
       text: displayText,
-      type: messageType === 'text' ? 'text' : 'file',
+      type: isKnownMediaType || attachmentUrl ? 'file' : 'text',
       fileUrl: attachmentUrl,
       filename: attachmentFilename,
       mimeType: attachmentMimeType,
