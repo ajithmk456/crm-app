@@ -56,7 +56,7 @@ exports.sendChatMessage = async (req, res, next) => {
 exports.processGupshupWebhook = (body) => {
   const payload = body?.payload || {};
   const eventType = String(body?.type || '').toLowerCase();
-  const businessSource = normalizePhone(process.env.GUPSHUP_SOURCE || '');
+  const businessSource = normalizePhone(process.env.GUPSHUP_SOURCE || '916384322139');
 
   const messageId = payload.id || payload.messageId || payload.gsId || payload.message_id || '';
   const destination = normalizePhone(payload.destination || payload.to);
