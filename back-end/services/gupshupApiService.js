@@ -18,6 +18,16 @@ const normalizeDestination = (value) => {
   return digits;
 };
 
+const normalizeAttachmentFilename = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return `attachment-${Date.now()}`;
+  }
+
+  // Keep provider-safe filename characters and replace spaces/special chars with underscores.
+  return raw.replace(/[^a-zA-Z0-9._-]/g, '_');
+};
+
 const extractMessageId = (responseBody) => {
   if (!responseBody || typeof responseBody !== 'object') {
     return '';
@@ -91,12 +101,14 @@ const sendGupshupFileMessage = async ({ to, fileUrl, filename }) => {
     throw new Error('fileUrl is required to send a file message.');
   }
 
+  const providerFilename = normalizeAttachmentFilename(filename);
+
   const form = buildBaseForm(destination);
   form.append('message', JSON.stringify({
     type: 'file',
     file: {
       link: String(fileUrl),
-      filename: String(filename || 'attachment'),
+      filename: providerFilename,
     },
   }));
 
