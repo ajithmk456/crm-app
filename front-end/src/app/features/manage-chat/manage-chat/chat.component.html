@@ -51,13 +51,24 @@
         <div class="chat-user">
           <div class="avatar large">{{ selectedConversation.phoneNumber.slice(-2) }}</div>
           <div>
-            <h3>{{ activeConversationTitle }}</h3>
+            <div class="chat-title-row">
+              <h3>{{ activeConversationTitle }}</h3>
+              <span
+                class="session-badge"
+                [class.expired]="!isSessionActive"
+                [attr.aria-label]="sessionStateLabel"
+                role="status"
+              >
+                <span class="session-dot" aria-hidden="true"></span>
+                <span class="session-text">{{ sessionStateLabel }}</span>
+              </span>
+            </div>
             <p><span class="online-dot"></span> synced live</p>
           </div>
         </div>
       </header>
 
-      <div class="message-stream" #messageScroller>
+      <div class="message-stream" #messageScroller (scroll)="onMessageStreamScroll()">
         <div class="panel-state small" *ngIf="isLoadingMessages && !messages.length">
           Loading messages...
         </div>
@@ -72,36 +83,105 @@
           [class.outgoing]="message.direction === 'outgoing'"
         >
           <article class="bubble" [class.pending]="message.isPending">
-            <p>{{ message.text }}</p>
+            <ng-container *ngIf="isFileMessage(message); else textMessageTpl">
+              <div class="file-message-card">
+                <div class="file-message-header">
+                  <i class="fa-solid" [ngClass]="getFileIconClass(message)"></i>
+                  <span class="file-name">{{ message.filename || message.text }}</span>
+                </div>
+                <a
+                  *ngIf="message.fileUrl"
+                  class="file-download-link"
+                  [href]="message.fileUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Download
+                </a>
+              </div>
+            </ng-container>
+            <ng-template #textMessageTpl>
+              <p>{{ message.text }}</p>
+            </ng-template>
             <div class="meta-row">
               <time>{{ message.timestamp | date:'shortTime' }}</time>
-              <span class="status" *ngIf="message.direction === 'outgoing'">
-                <ng-container [ngSwitch]="message.isPending ? 'sending' : message.status">
-                  <i *ngSwitchCase="'sending'" class="fa-solid fa-clock"></i>
-                  <i *ngSwitchCase="'sent'" class="fa-solid fa-check"></i>
-                  <i *ngSwitchCase="'delivered'" class="fa-solid fa-check-double"></i>
-                  <i *ngSwitchCase="'read'" class="fa-solid fa-check-double status-read"></i>
-                  <i *ngSwitchCase="'failed'" class="fa-solid fa-triangle-exclamation status-failed"></i>
-                  <i *ngSwitchDefault class="fa-solid fa-check"></i>
+              <ng-container *ngIf="message.direction === 'outgoing'">
+                <ng-container *ngIf="(message.isPending ? 'sending' : message.status) === 'failed'; else tickStatus">
+                  <span class="failed-meta" role="status" aria-live="polite">
+                    <i class="fa-solid fa-circle-xmark failed-indicator" aria-hidden="true"></i>
+                    <span class="failed-text">Failed to send</span>
+                    <button
+                      type="button"
+                      class="retry-button"
+                      (click)="retryFailedMessage(message)"
+                    >
+                      Retry
+                    </button>
+                  </span>
                 </ng-container>
-              </span>
+                <ng-template #tickStatus>
+                  <span class="status">
+                    <ng-container [ngSwitch]="message.isPending ? 'sending' : message.status">
+                      <i *ngSwitchCase="'sending'" class="fa-solid fa-clock"></i>
+                      <i *ngSwitchCase="'sent'" class="fa-solid fa-check"></i>
+                      <i *ngSwitchCase="'delivered'" class="fa-solid fa-check-double"></i>
+                      <i *ngSwitchCase="'read'" class="fa-solid fa-check-double status-read"></i>
+                      <i *ngSwitchDefault class="fa-solid fa-check"></i>
+                    </ng-container>
+                  </span>
+                </ng-template>
+              </ng-container>
             </div>
           </article>
         </div>
+
+        <button
+          type="button"
+          class="scroll-latest-button"
+          *ngIf="showScrollToBottomButton"
+          (click)="scrollToLatest()"
+        >
+          <i class="fa-solid fa-arrow-down"></i>
+          <span *ngIf="unreadNewMessages > 0">New messages ({{ unreadNewMessages }})</span>
+          <span *ngIf="unreadNewMessages === 0">Scroll to latest</span>
+        </button>
       </div>
 
       <footer class="composer">
+        <input
+          #attachmentInput
+          type="file"
+          class="hidden-file-input"
+          accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx"
+          (change)="onAttachmentSelected($event)"
+        >
         <div class="composer-input">
+          <div class="attachment-chip" *ngIf="selectedAttachment as attachment">
+            <i class="fa-solid fa-paperclip"></i>
+            <span>{{ attachment.name }}</span>
+            <button type="button" (click)="removeSelectedAttachment()" aria-label="Remove selected attachment">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
           <textarea
             [(ngModel)]="draftMessage"
             rows="1"
             placeholder="Type a message"
-            (keydown.enter)="$event.preventDefault(); sendMessage()"
+            (keydown)="onComposerKeydown($event)"
           ></textarea>
         </div>
+        <button
+          type="button"
+          class="attach-button"
+          [disabled]="isSending || isUploadingAttachment"
+          (click)="openAttachmentPicker()"
+          aria-label="Attach file"
+        >
+          <i class="fa-solid fa-paperclip"></i>
+        </button>
         <button type="button" class="send-button" [disabled]="!canSend" (click)="sendMessage()">
           <i class="fa-solid fa-paper-plane"></i>
-          <span>{{ isSending ? 'Sending...' : 'Send' }}</span>
+          <span>{{ isUploadingAttachment ? 'Uploading...' : (isSending ? 'Sending...' : 'Send') }}</span>
         </button>
       </footer>
     </ng-container>

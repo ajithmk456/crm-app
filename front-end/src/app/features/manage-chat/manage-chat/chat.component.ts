@@ -10,11 +10,16 @@ import {
   ChatMessageMetadata,
   ChatService,
   RealtimeChatEvent,
-  SendMessageResponse,
 } from './chat.service';
 
 interface PendingMessage extends ChatMessage {
   isPending?: boolean;
+}
+
+interface SelectedAttachment {
+  file: File;
+  name: string;
+  mimeType: string;
 }
 
 @Component({
@@ -26,6 +31,7 @@ interface PendingMessage extends ChatMessage {
 })
 export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('messageScroller') private messageScroller?: ElementRef<HTMLDivElement>;
+  @ViewChild('attachmentInput') private attachmentInput?: ElementRef<HTMLInputElement>;
 
   conversations: ChatConversation[] = [];
   selectedConversation: ChatConversation | null = null;
@@ -35,6 +41,11 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   isLoadingConversations = false;
   isLoadingMessages = false;
   isSending = false;
+  isUploadingAttachment = false;
+  sessionState: 'active' | 'expired' = 'active';
+  showScrollToBottomButton = false;
+  unreadNewMessages = 0;
+  selectedAttachment: SelectedAttachment | null = null;
 
   private readonly destroy$ = new Subject<void>();
   private readonly selectedConversation$ = new Subject<string>();
@@ -179,7 +190,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     ],
   };
   private pendingMessages: PendingMessage[] = [];
-  private shouldScrollToBottom = false;
+  private forceScrollOnNextMessageUpdate = false;
 
   constructor(private readonly chatService: ChatService) {}
 
@@ -215,7 +226,20 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   get canSend(): boolean {
-    return !!this.selectedConversation && !!this.draftMessage.trim() && !this.isSending;
+    return (
+      !!this.selectedConversation
+      && (!!this.draftMessage.trim() || !!this.selectedAttachment)
+      && !this.isSending
+      && !this.isUploadingAttachment
+    );
+  }
+
+  get isSessionActive(): boolean {
+    return this.sessionState === 'active';
+  }
+
+  get sessionStateLabel(): string {
+    return this.isSessionActive ? 'Active session' : 'Session expired';
   }
 
   selectConversation(conversation: ChatConversation): void {
@@ -227,24 +251,40 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     this.pendingMessages = [];
     this.messages = [];
     this.isLoadingMessages = true;
+    this.showScrollToBottomButton = false;
+    this.unreadNewMessages = 0;
+    this.forceScrollOnNextMessageUpdate = true;
     this.selectedConversation$.next(conversation._id);
   }
 
   sendMessage(): void {
     const text = this.draftMessage.trim();
-    if (!text || !this.selectedConversation || this.isSending) {
+    if (!this.selectedConversation || this.isSending || this.isUploadingAttachment) {
       return;
     }
 
-    this.isSending = true;
+    if (this.selectedAttachment) {
+      this.sendAttachmentMessage(this.selectedConversation, text);
+      return;
+    }
+
+    if (!text) {
+      return;
+    }
+
     const selectedConversation = this.selectedConversation;
+    const localPendingId = this.buildLocalPendingMessageId();
+
+    this.addOptimisticOutgoingMessage(text, selectedConversation, localPendingId);
+    this.draftMessage = '';
+    this.syncSelectedConversationPreview(text, selectedConversation._id);
+    this.queueScrollToBottom(true);
+
+    this.isSending = true;
 
     if (this.isMockConversation(selectedConversation._id)) {
       this.isSending = false;
-      this.addMockOutgoingMessage(text, selectedConversation);
-      this.draftMessage = '';
-      this.syncSelectedConversationPreview(text, selectedConversation._id);
-      this.queueScrollToBottom();
+      this.resolvePendingMessage(localPendingId, `mock-${Date.now()}`);
       return;
     }
 
@@ -254,15 +294,60 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response) => {
         this.isSending = false;
-        this.addPendingOutgoingMessage(text, response, selectedConversation);
-        this.draftMessage = '';
-        this.syncSelectedConversationPreview(text, selectedConversation._id);
-        this.queueScrollToBottom();
+        this.resolvePendingMessage(localPendingId, response.data?.messageId);
       },
       error: () => {
         this.isSending = false;
+        this.markPendingMessageFailed(localPendingId);
       }
     });
+  }
+
+  openAttachmentPicker(): void {
+    this.attachmentInput?.nativeElement.click();
+  }
+
+  onAttachmentSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    this.selectedAttachment = {
+      file,
+      name: file.name,
+      mimeType: file.type,
+    };
+  }
+
+  removeSelectedAttachment(): void {
+    this.selectedAttachment = null;
+    if (this.attachmentInput?.nativeElement) {
+      this.attachmentInput.nativeElement.value = '';
+    }
+  }
+
+  onComposerKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+    this.sendMessage();
+  }
+
+  onMessageStreamScroll(): void {
+    if (!this.isNearBottom()) {
+      return;
+    }
+
+    this.showScrollToBottomButton = false;
+    this.unreadNewMessages = 0;
+  }
+
+  scrollToLatest(): void {
+    this.queueScrollToBottom(true);
   }
 
   trackConversation(_: number, conversation: ChatConversation): string {
@@ -271,6 +356,43 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
   trackMessage(_: number, message: PendingMessage): string {
     return message.messageId || message._id || `${message.timestamp}-${message.text}`;
+  }
+
+  retryFailedMessage(message: PendingMessage): void {
+    // UI placeholder: backend retry integration can be wired later.
+    void message;
+  }
+
+  isFileMessage(message: PendingMessage): boolean {
+    return message.type === 'file' || Boolean(message.fileUrl || message.filename);
+  }
+
+  getFileIconClass(message: PendingMessage): string {
+    const fileName = String(message.filename || '').toLowerCase();
+    const mimeType = String(message.mimeType || '').toLowerCase();
+
+    if (fileName.endsWith('.pdf') || mimeType.includes('pdf')) {
+      return 'fa-file-pdf';
+    }
+
+    if (
+      fileName.endsWith('.jpg')
+      || fileName.endsWith('.jpeg')
+      || fileName.endsWith('.png')
+      || mimeType.startsWith('image/')
+    ) {
+      return 'fa-file-image';
+    }
+
+    if (fileName.endsWith('.docx') || mimeType.includes('wordprocessingml')) {
+      return 'fa-file-word';
+    }
+
+    if (fileName.endsWith('.xlsx') || mimeType.includes('spreadsheetml')) {
+      return 'fa-file-excel';
+    }
+
+    return 'fa-file';
   }
 
   private startConversationPolling(): void {
@@ -349,8 +471,27 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
         return;
       }
 
+      const previousLastMessageId = this.messages[this.messages.length - 1]?.messageId || '';
       this.messages = this.mergePendingMessages(this.withMockMetadata(response.data));
-      this.queueScrollToBottom();
+      const nextLastMessageId = this.messages[this.messages.length - 1]?.messageId || '';
+      const hasNewTailMessage = Boolean(nextLastMessageId && nextLastMessageId !== previousLastMessageId);
+
+      if (this.forceScrollOnNextMessageUpdate) {
+        this.forceScrollOnNextMessageUpdate = false;
+        this.queueScrollToBottom(true);
+        return;
+      }
+
+      if (!hasNewTailMessage) {
+        return;
+      }
+
+      if (this.isNearBottom()) {
+        this.queueScrollToBottom();
+      } else {
+        this.unreadNewMessages += 1;
+        this.showScrollToBottomButton = true;
+      }
     });
   }
 
@@ -381,15 +522,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     return String(value || '').replace(/^whatsapp:/i, '').replace(/\D/g, '').trim();
   }
 
-  private addPendingOutgoingMessage(
+  private addOptimisticOutgoingMessage(
     text: string,
-    response: SendMessageResponse,
-    conversation: ChatConversation
+    conversation: ChatConversation,
+    localPendingId: string
   ): void {
     const now = new Date().toISOString();
     const pendingMessage: PendingMessage = {
-      _id: `pending-${Date.now()}`,
-      messageId: response.data?.messageId || `pending-${Date.now()}`,
+      _id: localPendingId,
+      messageId: localPendingId,
       conversationId: conversation._id,
       from: 'me',
       to: conversation.phoneNumber,
@@ -400,7 +541,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       timestamp: now,
       metadata: this.buildMockMetadata(
         {
-          messageId: response.data?.messageId || `pending-${Date.now()}`,
+          messageId: localPendingId,
           direction: 'outgoing',
           type: 'text',
           text,
@@ -411,6 +552,147 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     };
 
     this.pendingMessages = [...this.pendingMessages, pendingMessage];
+    this.messages = this.mergePendingMessages(this.messages);
+  }
+
+  private sendAttachmentMessage(conversation: ChatConversation, text: string): void {
+    const attachment = this.selectedAttachment;
+    if (!attachment) {
+      return;
+    }
+
+    if (this.isMockConversation(conversation._id)) {
+      this.addMockOutgoingFileMessage(conversation, attachment);
+      this.draftMessage = '';
+      this.removeSelectedAttachment();
+      this.syncSelectedConversationPreview(attachment.name || text || 'Attachment', conversation._id);
+      this.queueScrollToBottom(true);
+      return;
+    }
+
+    const localPendingId = this.buildLocalPendingMessageId();
+    this.addOptimisticOutgoingFileMessage(conversation, attachment, localPendingId, text);
+    this.queueScrollToBottom(true);
+
+    this.isSending = true;
+    this.isUploadingAttachment = true;
+
+    this.chatService.uploadFile(attachment.file).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (uploadResponse) => {
+        if (!uploadResponse.success || !uploadResponse.data?.url) {
+          this.isSending = false;
+          this.isUploadingAttachment = false;
+          this.markPendingMessageFailed(localPendingId);
+          return;
+        }
+
+        this.chatService.sendFile({
+          to: conversation.phoneNumber,
+          fileUrl: uploadResponse.data.url,
+          filename: uploadResponse.data.filename,
+          mimeType: uploadResponse.data.mimeType,
+        }).pipe(takeUntil(this.destroy$)).subscribe({
+          next: (sendResponse) => {
+            this.isSending = false;
+            this.isUploadingAttachment = false;
+            this.resolvePendingMessage(localPendingId, sendResponse.data?.messageId, {
+              fileUrl: uploadResponse.data?.url,
+              filename: uploadResponse.data?.filename,
+              mimeType: uploadResponse.data?.mimeType,
+            });
+            this.draftMessage = '';
+            this.removeSelectedAttachment();
+            this.syncSelectedConversationPreview(uploadResponse.data?.filename || 'Attachment', conversation._id);
+            this.queueScrollToBottom(true);
+          },
+          error: () => {
+            this.isSending = false;
+            this.isUploadingAttachment = false;
+            this.markPendingMessageFailed(localPendingId);
+          },
+        });
+      },
+      error: () => {
+        this.isSending = false;
+        this.isUploadingAttachment = false;
+        this.markPendingMessageFailed(localPendingId);
+      },
+    });
+  }
+
+  private addOptimisticOutgoingFileMessage(
+    conversation: ChatConversation,
+    attachment: SelectedAttachment,
+    localPendingId: string,
+    fallbackText: string
+  ): void {
+    const now = new Date().toISOString();
+    const pendingMessage: PendingMessage = {
+      _id: localPendingId,
+      messageId: localPendingId,
+      conversationId: conversation._id,
+      from: 'me',
+      to: conversation.phoneNumber,
+      text: attachment.name || fallbackText || 'Attachment',
+      type: 'file',
+      fileUrl: '',
+      filename: attachment.name,
+      mimeType: attachment.mimeType,
+      direction: 'outgoing',
+      status: 'sent',
+      timestamp: now,
+      metadata: this.buildMockMetadata(
+        {
+          messageId: localPendingId,
+          direction: 'outgoing',
+          type: 'file',
+          text: attachment.name,
+        },
+        0
+      ),
+      isPending: true,
+    };
+
+    this.pendingMessages = [...this.pendingMessages, pendingMessage];
+    this.messages = this.mergePendingMessages(this.messages);
+  }
+
+  private resolvePendingMessage(
+    localPendingId: string,
+    providerMessageId?: string,
+    patch?: Partial<PendingMessage>
+  ): void {
+    const resolvedId = String(providerMessageId || localPendingId);
+    this.pendingMessages = this.pendingMessages.map((message) => {
+      if (message.messageId !== localPendingId) {
+        return message;
+      }
+
+      return {
+        ...message,
+        ...patch,
+        messageId: resolvedId,
+        _id: resolvedId,
+        isPending: false,
+      };
+    });
+
+    this.messages = this.mergePendingMessages(this.messages);
+  }
+
+  private markPendingMessageFailed(localPendingId: string): void {
+    this.pendingMessages = this.pendingMessages.map((message) => {
+      if (message.messageId !== localPendingId) {
+        return message;
+      }
+
+      return {
+        ...message,
+        status: 'failed',
+        isPending: false,
+      };
+    });
+
     this.messages = this.mergePendingMessages(this.messages);
   }
 
@@ -497,6 +779,39 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     this.messages = this.mergePendingMessages(this.withMockMetadata(this.mockMessagesByConversation[conversation._id]));
   }
 
+  private addMockOutgoingFileMessage(conversation: ChatConversation, attachment: SelectedAttachment): void {
+    const now = new Date().toISOString();
+    const messageId = `mock-file-${Date.now()}`;
+    const nextMessage: ChatMessage = {
+      _id: messageId,
+      messageId,
+      conversationId: conversation._id,
+      from: 'business',
+      to: conversation.phoneNumber,
+      text: attachment.name,
+      type: 'file',
+      fileUrl: '',
+      filename: attachment.name,
+      mimeType: attachment.mimeType,
+      direction: 'outgoing',
+      status: 'read',
+      timestamp: now,
+      metadata: this.buildMockMetadata(
+        {
+          messageId,
+          direction: 'outgoing',
+          type: 'file',
+          text: attachment.name,
+        },
+        0
+      ),
+    };
+
+    const existing = this.mockMessagesByConversation[conversation._id] || [];
+    this.mockMessagesByConversation[conversation._id] = [...existing, nextMessage];
+    this.messages = this.mergePendingMessages(this.withMockMetadata(this.mockMessagesByConversation[conversation._id]));
+  }
+
   private minutesAgoIso(minutes: number): string {
     return new Date(Date.now() - minutes * 60 * 1000).toISOString();
   }
@@ -520,22 +835,40 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  private queueScrollToBottom(): void {
-    this.shouldScrollToBottom = true;
-    setTimeout(() => this.scrollToBottom(), 0);
+  private buildLocalPendingMessageId(): string {
+    return `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  private scrollToBottom(): void {
-    if (!this.shouldScrollToBottom) {
-      return;
-    }
+  private queueScrollToBottom(force = false): void {
+    requestAnimationFrame(() => this.scrollToBottom(force));
+  }
 
+  private scrollToBottom(force = false): void {
     const container = this.messageScroller?.nativeElement;
     if (!container) {
       return;
     }
 
-    container.scrollTop = container.scrollHeight;
-    this.shouldScrollToBottom = false;
+    if (!force && !this.isNearBottom()) {
+      this.showScrollToBottomButton = true;
+      return;
+    }
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: 'smooth',
+    });
+    this.showScrollToBottomButton = false;
+    this.unreadNewMessages = 0;
+  }
+
+  private isNearBottom(threshold = 96): boolean {
+    const container = this.messageScroller?.nativeElement;
+    if (!container) {
+      return true;
+    }
+
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    return distanceFromBottom <= threshold;
   }
 }

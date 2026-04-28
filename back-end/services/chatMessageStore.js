@@ -79,6 +79,10 @@ const saveMessage = (message) => {
     messageId: message.messageId || '',
     phone: normalizePhone(message.phone),
     text: String(message.text || ''),
+    type: String(message.type || 'text').toLowerCase(),
+    fileUrl: message.fileUrl ? String(message.fileUrl) : '',
+    filename: message.filename ? String(message.filename) : '',
+    mimeType: message.mimeType ? String(message.mimeType) : '',
     direction: normalizeDirection(message.direction),
     status: normalizeStatus(message.status),
     timestamp: toDate(message.timestamp),
@@ -103,6 +107,10 @@ const saveMessage = (message) => {
         status: normalized.status || existing.status,
         // Preserve existing text when a status event has no text.
         text: normalized.text || existing.text,
+        type: normalized.type || existing.type || 'text',
+        fileUrl: normalized.fileUrl || existing.fileUrl,
+        filename: normalized.filename || existing.filename,
+        mimeType: normalized.mimeType || existing.mimeType,
       };
       return chatMessages[existingIndex];
     }
@@ -160,6 +168,10 @@ const updateMessageStatus = ({ messageId, status, destination, source, timestamp
     messageId: normalizedMessageId,
     phone: targetPhone,
     text: '',
+    type: 'text',
+    fileUrl: '',
+    filename: '',
+    mimeType: '',
     direction: 'out',
     status: normalizedStatus,
     timestamp: toDate(timestamp),

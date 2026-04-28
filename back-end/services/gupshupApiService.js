@@ -34,18 +34,7 @@ const extractMessageId = (responseBody) => {
   );
 };
 
-const sendGupshupTextMessage = async ({ to, message }) => {
-  const apiKey = process.env.GUPSHUP_API_KEY || process.env.GUPSHUP_APIKEY;
-  if (!apiKey) {
-    throw new Error('GUPSHUP_API_KEY is not configured.');
-  }
-
-  const destination = normalizeDestination(to);
-  if (!destination) {
-    throw new Error('A valid destination number is required.');
-  }
-
-  // Gupshup requires x-www-form-urlencoded payload.
+const buildBaseForm = (destination) => {
   const form = new URLSearchParams();
   form.append('channel', 'whatsapp');
   form.append('source', GUPSHUP_SOURCE);
@@ -53,10 +42,14 @@ const sendGupshupTextMessage = async ({ to, message }) => {
   if (GUPSHUP_SRC_NAME) {
     form.append('src.name', GUPSHUP_SRC_NAME);
   }
-  form.append('message', JSON.stringify({
-    type: 'text',
-    text: String(message),
-  }));
+  return form;
+};
+
+const sendGupshupMessage = async (form) => {
+  const apiKey = process.env.GUPSHUP_API_KEY || process.env.GUPSHUP_APIKEY;
+  if (!apiKey) {
+    throw new Error('GUPSHUP_API_KEY is not configured.');
+  }
 
   const response = await axios.post(GUPSHUP_SEND_URL, form.toString(), {
     headers: {
@@ -66,14 +59,52 @@ const sendGupshupTextMessage = async ({ to, message }) => {
     timeout: 15000,
   });
 
-  const messageId = extractMessageId(response.data);
-
   return {
-    messageId,
+    messageId: extractMessageId(response.data),
     providerResponse: response.data,
   };
 };
 
+const sendGupshupTextMessage = async ({ to, message }) => {
+  const destination = normalizeDestination(to);
+  if (!destination) {
+    throw new Error('A valid destination number is required.');
+  }
+
+  // Gupshup requires x-www-form-urlencoded payload.
+  const form = buildBaseForm(destination);
+  form.append('message', JSON.stringify({
+    type: 'text',
+    text: String(message),
+  }));
+
+  return sendGupshupMessage(form);
+};
+
+const sendGupshupFileMessage = async ({ to, fileUrl, filename }) => {
+  const destination = normalizeDestination(to);
+  if (!destination) {
+    throw new Error('A valid destination number is required.');
+  }
+
+  if (!fileUrl) {
+    throw new Error('fileUrl is required to send a file message.');
+  }
+
+  const form = buildBaseForm(destination);
+  form.append('message', JSON.stringify({
+    type: 'file',
+    file: {
+      link: String(fileUrl),
+      filename: String(filename || 'attachment'),
+    },
+  }));
+
+  return sendGupshupMessage(form);
+};
+
 module.exports = {
+  normalizeDestination,
   sendGupshupTextMessage,
+  sendGupshupFileMessage,
 };

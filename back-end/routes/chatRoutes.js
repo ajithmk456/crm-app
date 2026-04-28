@@ -1,5 +1,5 @@
 const express = require('express');
-const { sendChatMessage, getChatByPhone, getChatConversations } = require('../controllers/chatController');
+const { sendChatMessage, sendChatFile, getChatByPhone, getChatConversations } = require('../controllers/chatController');
 
 const router = express.Router();
 
@@ -44,6 +44,47 @@ const router = express.Router();
 
 // Sends outbound WhatsApp message through Gupshup.
 router.post('/send', sendChatMessage);
+
+/**
+ * @openapi
+ * /api/chat/send-file:
+ *   post:
+ *     tags:
+ *       - Chat
+ *     summary: Send WhatsApp file through Gupshup
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - to
+ *               - fileUrl
+ *               - filename
+ *             properties:
+ *               to:
+ *                 type: string
+ *                 example: "919999999999"
+ *               fileUrl:
+ *                 type: string
+ *                 example: "https://api.example.com/uploads/1710000000-sample.pdf"
+ *               filename:
+ *                 type: string
+ *                 example: "sample.pdf"
+ *               mimeType:
+ *                 type: string
+ *                 example: "application/pdf"
+ *     responses:
+ *       200:
+ *         description: File message accepted by Gupshup
+ *       400:
+ *         description: Invalid payload
+ *       500:
+ *         description: Provider or server error
+ */
+// Sends outbound WhatsApp file through Gupshup.
+router.post('/send-file', sendChatFile);
 
 /**
  * @openapi

@@ -18,7 +18,10 @@ export interface ChatMessage {
   from: string;
   to: string;
   text: string;
-  type: string;
+  type: 'text' | 'file';
+  fileUrl?: string;
+  filename?: string;
+  mimeType?: string;
   direction: 'incoming' | 'outgoing';
   status: 'sent' | 'delivered' | 'read' | 'failed';
   timestamp: string;
@@ -57,6 +60,23 @@ export interface SendMessageResponse {
   message?: string;
 }
 
+export interface UploadFileResponse {
+  success: boolean;
+  data?: {
+    url: string;
+    filename: string;
+    mimeType: string;
+  };
+  message?: string;
+}
+
+export interface SendFileRequest {
+  to: string;
+  fileUrl: string;
+  filename: string;
+  mimeType?: string;
+}
+
 export interface RealtimeChatEvent {
   eventType: 'incoming' | 'outgoing' | 'status';
   phone: string;
@@ -90,7 +110,13 @@ export class ChatService {
         ...response,
         data: (response.data || []).reduce<ChatMessage[]>((acc, item) => {
           const normalizedText = String(item.text || '').trim();
-          if (!normalizedText) {
+          const fileUrl = String(item.fileUrl || item.url || '').trim();
+          const filename = String(item.filename || '').trim();
+          const mimeType = String(item.mimeType || '').trim();
+          const rawType = String(item.type || 'text').toLowerCase();
+          const isFileMessage = rawType === 'file' || Boolean(fileUrl || filename);
+
+          if (!normalizedText && !isFileMessage) {
             return acc;
           }
 
@@ -105,8 +131,11 @@ export class ChatService {
             conversationId,
             from: isIncoming ? phone : 'business',
             to: isIncoming ? 'business' : phone,
-            text: normalizedText,
-            type: 'text',
+            text: normalizedText || filename || 'Attachment',
+            type: isFileMessage ? 'file' : 'text',
+            fileUrl: fileUrl || undefined,
+            filename: filename || undefined,
+            mimeType: mimeType || undefined,
             direction: isIncoming ? 'incoming' : 'outgoing',
             status: (['sent', 'delivered', 'read', 'failed'].includes(normalizedStatus) ? normalizedStatus : 'sent') as ChatMessage['status'],
             timestamp: item.timestamp,
@@ -120,6 +149,16 @@ export class ChatService {
 
   sendMessage(data: SendMessageRequest): Observable<SendMessageResponse> {
     return this.http.post<SendMessageResponse>('/api/chat/send', data);
+  }
+
+  uploadFile(file: File): Observable<UploadFileResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<UploadFileResponse>('/api/files/upload', formData);
+  }
+
+  sendFile(data: SendFileRequest): Observable<SendMessageResponse> {
+    return this.http.post<SendMessageResponse>('/api/chat/send-file', data);
   }
 
   onRealtimeUpdates(): Observable<RealtimeChatEvent> {
