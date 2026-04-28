@@ -61,10 +61,21 @@ exports.processGupshupWebhook = (body) => {
   const eventType = String(body?.type || '').toLowerCase();
   const businessSource = normalizePhone(process.env.GUPSHUP_SOURCE || '916384322139');
 
-  const messageId = payload.id || payload.messageId || payload.gsId || payload.message_id || '';
+  const messageId =
+    payload.id ||
+    payload.messageId ||
+    payload.gsId ||
+    payload.message_id ||
+    nestedPayload.id ||
+    nestedPayload.messageId ||
+    nestedPayload.gsId ||
+    nestedPayload.message_id ||
+    '';
   const destination = normalizePhone(
     payload.destination ||
       payload.to ||
+      nestedPayload.destination ||
+      nestedPayload.to ||
       context.destination ||
       context.to ||
       context.phone
@@ -72,12 +83,14 @@ exports.processGupshupWebhook = (body) => {
   const source = normalizePhone(
     payload.source ||
       payload.from ||
+      nestedPayload.source ||
+      nestedPayload.from ||
       sender.phone ||
       sender.id ||
       context.source ||
       context.from
   );
-  const status = normalizeStatus(payload.status, 'sent');
+  const status = normalizeStatus(payload.status || nestedPayload.status, 'sent');
   const text =
     payload.text ||
     payload.body ||
@@ -87,14 +100,15 @@ exports.processGupshupWebhook = (body) => {
     nestedPayload.message ||
     nestedPayload.caption ||
     '';
-  const reason = payload.reason || '';
+  const reason = payload.reason || nestedPayload.reason || '';
+  const eventTimestamp = payload.timestamp || nestedPayload.timestamp || new Date();
   const isFromBusiness = Boolean(
     businessSource &&
       ((source && source === businessSource) || (destination && destination !== businessSource && source === businessSource))
   );
   const phone = isFromBusiness ? destination : (source || destination);
 
-  const isStatusUpdate = Boolean(payload.status);
+  const isStatusUpdate = Boolean(payload.status || nestedPayload.status);
   const isIncomingEvent = eventType.includes('message') || (!isStatusUpdate && Boolean(text));
 
   if (isStatusUpdate) {
@@ -103,7 +117,7 @@ exports.processGupshupWebhook = (body) => {
       status,
       destination,
       source,
-      timestamp: payload.timestamp || new Date(),
+      timestamp: eventTimestamp,
       reason,
     });
 
@@ -131,7 +145,7 @@ exports.processGupshupWebhook = (body) => {
       text,
       direction: isFromBusiness ? 'out' : 'in',
       status: 'sent',
-      timestamp: payload.timestamp || new Date(),
+      timestamp: eventTimestamp,
       source,
       destination,
     });

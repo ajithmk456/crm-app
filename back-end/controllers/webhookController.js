@@ -226,15 +226,16 @@ exports.handleGupshupWebhook = (req, res) => {
 
     const body = req.body || {};
     const payload = body.payload || {};
+    const nestedPayload = payload.payload || {};
 
     // Extract key values requested for operational debugging.
     const eventType = body.type || 'unknown';
-    const status = payload.status || 'unknown';
-    const messageId = payload.id || payload.messageId || 'unknown';
-    const destination = payload.destination || 'unknown';
-    const source = payload.source || 'unknown';
-    const text = payload.text || payload.body || '';
-    const reason = payload.reason || null;
+    const status = payload.status || nestedPayload.status || 'unknown';
+    const messageId = payload.id || payload.messageId || nestedPayload.id || nestedPayload.messageId || 'unknown';
+    const destination = payload.destination || payload.to || nestedPayload.destination || nestedPayload.to || 'unknown';
+    const source = payload.source || payload.from || nestedPayload.source || nestedPayload.from || 'unknown';
+    const text = payload.text || payload.body || nestedPayload.text || nestedPayload.body || '';
+    const reason = payload.reason || nestedPayload.reason || null;
 
     const storedEvent = processGupshupWebhook(body);
 
