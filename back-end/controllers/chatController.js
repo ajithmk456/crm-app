@@ -60,6 +60,9 @@ exports.processGupshupWebhook = (body) => {
   const context = payload?.context || {};
   const eventType = String(body?.type || '').toLowerCase();
   const businessSource = normalizePhone(process.env.GUPSHUP_SOURCE || '916384322139');
+  const payloadType = String(payload.type || nestedPayload.type || '').toLowerCase();
+  const rawStatus = payload.status || nestedPayload.status || payload.eventType || nestedPayload.eventType || payloadType;
+  const hasExplicitStatus = ['sent', 'submitted', 'enqueued', 'queued', 'delivered', 'read', 'failed'].includes(String(rawStatus || '').toLowerCase());
 
   const messageId =
     payload.id ||
@@ -90,7 +93,7 @@ exports.processGupshupWebhook = (body) => {
       context.source ||
       context.from
   );
-  const status = normalizeStatus(payload.status || nestedPayload.status, 'sent');
+  const status = normalizeStatus(rawStatus, 'sent');
   const text =
     payload.text ||
     payload.body ||
@@ -108,7 +111,7 @@ exports.processGupshupWebhook = (body) => {
   );
   const phone = isFromBusiness ? destination : (source || destination);
 
-  const isStatusUpdate = Boolean(payload.status || nestedPayload.status);
+  const isStatusUpdate = Boolean(payload.status || nestedPayload.status || hasExplicitStatus || (!String(text || '').trim() && payloadType !== 'text'));
   const isIncomingEvent = eventType.includes('message') || (!isStatusUpdate && Boolean(text));
 
   if (isStatusUpdate) {
@@ -119,11 +122,12 @@ exports.processGupshupWebhook = (body) => {
       source,
       timestamp: eventTimestamp,
       reason,
+      phone,
     });
 
     emitChatUpdate({
       eventType: 'status',
-      phone: destination || source,
+      phone,
       messageId,
       status,
       source,

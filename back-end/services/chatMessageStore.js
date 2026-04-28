@@ -11,6 +11,9 @@ const normalizePhone = (value) => {
 
 const normalizeStatus = (value, fallback = 'sent') => {
   const status = String(value || '').toLowerCase();
+  if (status === 'submitted' || status === 'enqueued' || status === 'queued') {
+    return 'sent';
+  }
   if (status === 'delivered' || status === 'read' || status === 'failed' || status === 'sent') {
     return status;
   }
@@ -109,12 +112,13 @@ const saveMessage = (message) => {
   return normalized;
 };
 
-const updateMessageStatus = ({ messageId, status, destination, source, timestamp, reason }) => {
+const updateMessageStatus = ({ messageId, status, destination, source, timestamp, reason, phone }) => {
   const normalizedMessageId = String(messageId || '').trim();
   const normalizedDestination = normalizePhone(destination);
   const normalizedSource = normalizePhone(source);
   const normalizedStatus = normalizeStatus(status, 'sent');
-  const targetPhone = normalizedDestination || normalizedSource;
+  const normalizedPhone = normalizePhone(phone);
+  const targetPhone = normalizedPhone || normalizedDestination || normalizedSource;
 
   if (!normalizedMessageId) {
     return null;
