@@ -260,9 +260,12 @@ exports.processGupshupWebhook = async (body) => {
     nestedPayload?.file?.mimeType ||
     nestedPayload?.file?.mimetype ||
     '';
+
+  // Derive messageType early so we can fall back mimeType for images
   const messageType = String(
     payload.type || nestedPayload.type || (attachmentUrl ? 'file' : 'text')
   ).toLowerCase();
+  const resolvedMimeType = attachmentMimeType || (messageType === 'image' ? 'image/jpeg' : '');
   const isKnownMediaType = ['image', 'file', 'document', 'video', 'audio', 'sticker'].includes(messageType);
   const displayText = text || attachmentFilename || (isMediaType ? normalizedPayloadType : '');
   const reason = payload.reason || nestedPayload.reason || '';
@@ -312,7 +315,7 @@ exports.processGupshupWebhook = async (body) => {
       type: isKnownMediaType || attachmentUrl ? 'file' : 'text',
       fileUrl: attachmentUrl,
       filename: attachmentFilename,
-      mimeType: attachmentMimeType,
+      mimeType: resolvedMimeType,
       direction: isFromBusiness ? 'out' : 'in',
       status: 'sent',
       timestamp: eventTimestamp,

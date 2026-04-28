@@ -414,6 +414,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       || /\.(png|jpe?g|gif|webp)$/i.test(fileName)
       || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(fileUrl)
       || fallbackText === 'image'
+      || fileUrl.includes('filemanager.gupshup.io')
     );
   }
 
