@@ -54,10 +54,11 @@ const saveMessage = (message) => {
         ...existing,
         ...normalized,
         // Preserve key fields when webhook payload omits or sends blank values.
-        phone: normalized.phone || existing.phone,
-        source: normalized.source || existing.source,
-        destination: normalized.destination || existing.destination,
-        direction: normalized.direction || existing.direction,
+        phone: existing.phone || normalized.phone,
+        source: existing.source || normalized.source,
+        destination: existing.destination || normalized.destination,
+        // Keep previously-established direction to avoid webhook echo flipping out->in.
+        direction: existing.direction || normalized.direction,
         status: normalized.status || existing.status,
         // Preserve existing text when a status event has no text.
         text: normalized.text || existing.text,
