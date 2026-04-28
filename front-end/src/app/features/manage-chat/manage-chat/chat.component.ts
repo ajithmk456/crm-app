@@ -9,6 +9,7 @@ import {
   ChatMessage,
   ChatMessageMetadata,
   ChatService,
+  RealtimeChatEvent,
   SendMessageResponse,
 } from './chat.service';
 
@@ -185,6 +186,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnInit(): void {
     this.startConversationPolling();
     this.startMessagePolling();
+    this.startRealtimeUpdates();
   }
 
   ngAfterViewInit(): void {
@@ -350,6 +352,33 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       this.messages = this.mergePendingMessages(this.withMockMetadata(response.data));
       this.queueScrollToBottom();
     });
+  }
+
+  private startRealtimeUpdates(): void {
+    this.chatService.onRealtimeUpdates()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((event) => {
+        this.handleRealtimeUpdate(event);
+      });
+  }
+
+  private handleRealtimeUpdate(event: RealtimeChatEvent): void {
+    if (!this.selectedConversation || this.isMockConversation(this.selectedConversation._id)) {
+      return;
+    }
+
+    const selectedPhone = this.normalizePhone(this.selectedConversation.phoneNumber);
+    const eventPhone = this.normalizePhone(event.phone || event.destination || event.source || '');
+
+    if (!eventPhone || selectedPhone !== eventPhone) {
+      return;
+    }
+
+    this.selectedConversation$.next(this.selectedConversation._id);
+  }
+
+  private normalizePhone(value: string): string {
+    return String(value || '').replace(/^whatsapp:/i, '').trim();
   }
 
   private addPendingOutgoingMessage(

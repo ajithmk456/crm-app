@@ -1,5 +1,26 @@
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
+const { processGupshupWebhook } = require('./chatController');
+
+// In-memory debug store for recent Gupshup webhook events.
+// This is intentionally small and non-persistent to avoid memory growth.
+const gupshupWebhookDebugStore = [];
+const MAX_GUPSHUP_DEBUG_EVENTS = 200;
+
+const addGupshupDebugEvent = (event) => {
+  gupshupWebhookDebugStore.push(event);
+  if (gupshupWebhookDebugStore.length > MAX_GUPSHUP_DEBUG_EVENTS) {
+    gupshupWebhookDebugStore.shift();
+  }
+};
+
+const prettyPrint = (value) => {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch (error) {
+    return String(value);
+  }
+};
 
 const normalizePhoneNumber = (value) => {
   if (!value) {
@@ -195,5 +216,82 @@ exports.handleWebhook = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+exports.handleGupshupWebhook = (req, res) => {
+  try {
+    // Return HTTP 200 immediately so the provider receives acknowledgement quickly.
+    res.status(200).json({ success: true, message: 'Gupshup webhook received' });
+
+    const body = req.body || {};
+    const payload = body.payload || {};
+
+    // Extract key values requested for operational debugging.
+    const eventType = body.type || 'unknown';
+    const status = payload.status || 'unknown';
+    const messageId = payload.id || payload.messageId || 'unknown';
+    const destination = payload.destination || 'unknown';
+    const source = payload.source || 'unknown';
+    const text = payload.text || payload.body || '';
+    const reason = payload.reason || null;
+
+    const storedEvent = processGupshupWebhook(body);
+
+    const eventLog = {
+      receivedAt: new Date().toISOString(),
+      type: eventType,
+      status,
+      messageId,
+      destination,
+      source,
+      text,
+      reason,
+      stored: Boolean(storedEvent),
+      raw: body,
+    };
+
+    addGupshupDebugEvent(eventLog);
+
+    // Full body log for easy troubleshooting with readable formatting.
+    console.log('[GUPSHUP] Full request body:\n' + prettyPrint(body));
+
+    // Focused event log for key fields.
+    console.log(
+      '[GUPSHUP] type=' +
+        eventType +
+        ' status=' +
+        status +
+        ' messageId=' +
+        messageId +
+        ' destination=' +
+        destination +
+        ' source=' +
+        source +
+        (text ? ' text=' + JSON.stringify(text) : '') +
+        (reason ? ' reason=' + reason : '')
+    );
+
+    // Status-specific log lines for quick operational scanning.
+    const normalizedStatus = String(status).toLowerCase();
+    if (normalizedStatus === 'delivered') {
+      console.log('[GUPSHUP][DELIVERED] Message delivered. messageId=' + messageId + ' destination=' + destination);
+    } else if (normalizedStatus === 'failed') {
+      console.log(
+        '[GUPSHUP][FAILED] Message failed. messageId=' +
+          messageId +
+          ' destination=' +
+          destination +
+          (reason ? ' reason=' + reason : '')
+      );
+    } else if (normalizedStatus === 'read') {
+      console.log('[GUPSHUP][READ] Message read. messageId=' + messageId + ' destination=' + destination);
+    }
+  } catch (error) {
+    // Keep processing resilient and avoid throwing from webhook path.
+    console.error('[GUPSHUP] Error while processing webhook:', error);
+    if (!res.headersSent) {
+      return res.status(200).json({ success: true, message: 'Gupshup webhook received with processing error' });
+    }
   }
 };

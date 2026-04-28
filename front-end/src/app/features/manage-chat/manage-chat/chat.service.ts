@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { io, Socket } from 'socket.io-client';
 
 export interface ChatConversation {
   _id: string;
@@ -56,9 +57,28 @@ export interface SendMessageResponse {
   message?: string;
 }
 
+export interface RealtimeChatEvent {
+  eventType: 'incoming' | 'outgoing' | 'status';
+  phone: string;
+  messageId?: string;
+  status?: 'sent' | 'delivered' | 'read' | 'failed';
+  text?: string;
+  source?: string;
+  destination?: string;
+  timestamp?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ChatService {
-  constructor(private readonly http: HttpClient) {}
+  private readonly socket: Socket;
+
+  constructor(private readonly http: HttpClient) {
+    this.socket = io('/', {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      autoConnect: true,
+    });
+  }
 
   getConversations(): Observable<ApiListResponse<ChatConversation[]>> {
     return this.http.get<ApiListResponse<ChatConversation[]>>('/api/conversations');
@@ -71,5 +91,16 @@ export class ChatService {
 
   sendMessage(data: SendMessageRequest): Observable<SendMessageResponse> {
     return this.http.post<SendMessageResponse>('/api/messages/send', data);
+  }
+
+  onRealtimeUpdates(): Observable<RealtimeChatEvent> {
+    return new Observable<RealtimeChatEvent>((subscriber) => {
+      const handler = (event: RealtimeChatEvent) => subscriber.next(event);
+      this.socket.on('chat:update', handler);
+
+      return () => {
+        this.socket.off('chat:update', handler);
+      };
+    });
   }
 }
