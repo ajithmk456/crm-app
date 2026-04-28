@@ -6,7 +6,7 @@ const normalizePhone = (value) => {
   if (!value) {
     return '';
   }
-  return String(value).replace(/^whatsapp:/i, '').trim();
+  return String(value).replace(/^whatsapp:/i, '').replace(/\D/g, '').trim();
 };
 
 const normalizeStatus = (value, fallback = 'sent') => {

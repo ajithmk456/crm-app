@@ -88,23 +88,32 @@ export class ChatService {
     return this.http.get<ApiListResponse<any[]>>(`/api/chat/${encodeURIComponent(conversationId)}`).pipe(
       map((response) => ({
         ...response,
-        data: (response.data || []).map((item) => {
-          const isIncoming = String(item.direction || '').toLowerCase() === 'in';
+        data: (response.data || []).reduce<ChatMessage[]>((acc, item) => {
+          const normalizedText = String(item.text || '').trim();
+          if (!normalizedText) {
+            return acc;
+          }
+
+          const normalizedDirection = String(item.direction || '').toLowerCase();
+          const isIncoming = normalizedDirection === 'in' || normalizedDirection === 'incoming';
+          const normalizedStatus = String(item.status || 'sent').toLowerCase();
           const phone = String(item.phone || conversationId);
 
-          return {
+          acc.push({
             _id: item.messageId,
             messageId: item.messageId,
             conversationId,
             from: isIncoming ? phone : 'business',
             to: isIncoming ? 'business' : phone,
-            text: item.text || '',
+            text: normalizedText,
             type: 'text',
             direction: isIncoming ? 'incoming' : 'outgoing',
-            status: item.status || 'sent',
+            status: (['sent', 'delivered', 'read', 'failed'].includes(normalizedStatus) ? normalizedStatus : 'sent') as ChatMessage['status'],
             timestamp: item.timestamp,
-          } satisfies ChatMessage;
-        }),
+          });
+
+          return acc;
+        }, []),
       }))
     );
   }

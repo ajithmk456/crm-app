@@ -2,7 +2,7 @@
   <aside class="conversation-panel">
     <div class="panel-header">
       <div>
-        <p class="eyebrow">Conversations</p>
+        <p class="eyebrow">WhatsApp</p>
         <h2>WhatsApp Inbox</h2>
       </div>
       <span class="conversation-count">{{ conversations.length }}</span>
@@ -52,7 +52,7 @@
           <div class="avatar large">{{ selectedConversation.phoneNumber.slice(-2) }}</div>
           <div>
             <h3>{{ activeConversationTitle }}</h3>
-            <p>Conversation updates every 4 seconds</p>
+            <p><span class="online-dot"></span> synced live</p>
           </div>
         </div>
       </header>
@@ -72,19 +72,18 @@
           [class.outgoing]="message.direction === 'outgoing'"
         >
           <article class="bubble" [class.pending]="message.isPending">
-            <p>{{ message.text || (message.direction === 'outgoing' ? 'Outgoing status update' : 'Incoming message') }}</p>
-            <div class="mock-meta" *ngIf="message.metadata as meta">
-              <span class="meta-chip">{{ meta.sourceChannel }}</span>
-              <span class="meta-chip">{{ meta.campaign }}</span>
-              <span class="meta-chip">{{ meta.journeyStep }}</span>
-              <span class="meta-chip">{{ meta.tags.join(', ') }}</span>
-              <span class="meta-chip confidence">conf {{ meta.confidence }}</span>
-            </div>
+            <p>{{ message.text }}</p>
             <div class="meta-row">
               <time>{{ message.timestamp | date:'shortTime' }}</time>
-              <span *ngIf="message.metadata as meta">{{ meta.payloadId }}</span>
               <span class="status" *ngIf="message.direction === 'outgoing'">
-                {{ message.isPending ? 'sending' : message.status }}
+                <ng-container [ngSwitch]="message.isPending ? 'sending' : message.status">
+                  <i *ngSwitchCase="'sending'" class="fa-solid fa-clock"></i>
+                  <i *ngSwitchCase="'sent'" class="fa-solid fa-check"></i>
+                  <i *ngSwitchCase="'delivered'" class="fa-solid fa-check-double"></i>
+                  <i *ngSwitchCase="'read'" class="fa-solid fa-check-double status-read"></i>
+                  <i *ngSwitchCase="'failed'" class="fa-solid fa-triangle-exclamation status-failed"></i>
+                  <i *ngSwitchDefault class="fa-solid fa-check"></i>
+                </ng-container>
               </span>
             </div>
           </article>
