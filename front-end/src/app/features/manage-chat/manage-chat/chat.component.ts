@@ -378,7 +378,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private normalizePhone(value: string): string {
-    return String(value || '').replace(/^whatsapp:/i, '').trim();
+    return String(value || '').replace(/^whatsapp:/i, '').replace(/\D/g, '').trim();
   }
 
   private addPendingOutgoingMessage(
