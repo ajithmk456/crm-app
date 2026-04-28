@@ -67,6 +67,18 @@ exports.processGupshupWebhook = (body) => {
   const isFromBusiness = Boolean(businessSource && source && source === businessSource);
   const phone = isFromBusiness ? destination : (source || destination);
 
+  console.log('DEBUG Webhook:', {
+    messageId,
+    eventType,
+    businessSource,
+    source,
+    destination,
+    isFromBusiness,
+    text,
+    status,
+    payload: { source: payload.source, from: payload.from, destination: payload.destination, to: payload.to },
+  });
+
   const isStatusUpdate = Boolean(payload.status);
   const isIncomingEvent = eventType.includes('message') || (!isStatusUpdate && Boolean(text));
 
