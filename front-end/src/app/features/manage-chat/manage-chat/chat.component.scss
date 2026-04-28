@@ -317,6 +317,18 @@
   min-width: 180px;
 }
 
+.image-preview-link {
+  display: inline-block;
+}
+
+.image-preview {
+  width: min(220px, 100%);
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
 .file-message-header {
   display: flex;
   align-items: center;
@@ -421,6 +433,11 @@
   &:hover {
     opacity: 0.86;
   }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
 }
 
 .composer {
@@ -454,6 +471,12 @@
     color: #111b21;
     font: inherit;
   }
+}
+
+.upload-progress {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #0f766e;
 }
 
 .attachment-chip {

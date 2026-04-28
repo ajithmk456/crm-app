@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpEventType } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
@@ -67,6 +67,13 @@ export interface UploadFileResponse {
     filename: string;
     mimeType: string;
   };
+  message?: string;
+}
+
+export interface UploadFileProgressEvent {
+  done: boolean;
+  progress: number;
+  data?: UploadFileResponse['data'];
   message?: string;
 }
 
@@ -151,10 +158,37 @@ export class ChatService {
     return this.http.post<SendMessageResponse>('/api/chat/send', data);
   }
 
-  uploadFile(file: File): Observable<UploadFileResponse> {
+  uploadFile(file: File): Observable<UploadFileProgressEvent> {
     const formData = new FormData();
     formData.append('file', file);
-    return this.http.post<UploadFileResponse>('/api/files/upload', formData);
+    return this.http.post<UploadFileResponse>('/api/files/upload', formData, {
+      observe: 'events',
+      reportProgress: true,
+    }).pipe(
+      map((event) => {
+        if (event.type === HttpEventType.UploadProgress) {
+          const total = event.total || 1;
+          return {
+            done: false,
+            progress: Math.min(100, Math.round((event.loaded / total) * 100)),
+          } as UploadFileProgressEvent;
+        }
+
+        if (event.type === HttpEventType.Response) {
+          return {
+            done: true,
+            progress: 100,
+            data: event.body?.data,
+            message: event.body?.message,
+          } as UploadFileProgressEvent;
+        }
+
+        return {
+          done: false,
+          progress: 0,
+        } as UploadFileProgressEvent;
+      })
+    );
   }
 
   sendFile(data: SendFileRequest): Observable<SendMessageResponse> {

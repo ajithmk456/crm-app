@@ -10,6 +10,7 @@ import {
   ChatMessageMetadata,
   ChatService,
   RealtimeChatEvent,
+  SendFileRequest,
 } from './chat.service';
 
 interface PendingMessage extends ChatMessage {
@@ -42,10 +43,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   isLoadingMessages = false;
   isSending = false;
   isUploadingAttachment = false;
+  uploadProgress = 0;
   sessionState: 'active' | 'expired' = 'active';
   showScrollToBottomButton = false;
   unreadNewMessages = 0;
   selectedAttachment: SelectedAttachment | null = null;
+  retryingMessageId: string | null = null;
 
   private readonly destroy$ = new Subject<void>();
   private readonly selectedConversation$ = new Subject<string>();
@@ -359,12 +362,64 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   retryFailedMessage(message: PendingMessage): void {
-    // UI placeholder: backend retry integration can be wired later.
-    void message;
+    if (!this.selectedConversation || message.status !== 'failed' || this.retryingMessageId) {
+      return;
+    }
+
+    if (this.isFileMessage(message)) {
+      this.retryFailedFileMessage(message);
+      return;
+    }
+
+    const retryText = String(message.text || '').trim();
+    if (!retryText) {
+      return;
+    }
+
+    const localPendingId = this.buildLocalPendingMessageId();
+    this.addOptimisticOutgoingMessage(retryText, this.selectedConversation, localPendingId);
+    this.queueScrollToBottom(true);
+    this.retryingMessageId = message.messageId;
+
+    this.chatService.sendMessage({
+      to: this.selectedConversation.phoneNumber,
+      message: retryText,
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (response) => {
+        this.retryingMessageId = null;
+        this.resolvePendingMessage(localPendingId, response.data?.messageId);
+      },
+      error: () => {
+        this.retryingMessageId = null;
+        this.markPendingMessageFailed(localPendingId);
+      },
+    });
   }
 
   isFileMessage(message: PendingMessage): boolean {
     return message.type === 'file' || Boolean(message.fileUrl || message.filename);
+  }
+
+  isImageFileMessage(message: PendingMessage): boolean {
+    if (!this.isFileMessage(message)) {
+      return false;
+    }
+
+    const fileName = String(message.filename || '').toLowerCase();
+    const mimeType = String(message.mimeType || '').toLowerCase();
+    return mimeType.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(fileName);
+  }
+
+  canRetryMessage(message: PendingMessage): boolean {
+    if (message.status !== 'failed' || !this.selectedConversation) {
+      return false;
+    }
+
+    if (!this.isFileMessage(message)) {
+      return Boolean(String(message.text || '').trim());
+    }
+
+    return Boolean(message.fileUrl && message.filename);
   }
 
   getFileIconClass(message: PendingMessage): string {
@@ -576,38 +631,56 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.isSending = true;
     this.isUploadingAttachment = true;
+    this.uploadProgress = 0;
 
     this.chatService.uploadFile(attachment.file).pipe(takeUntil(this.destroy$)).subscribe({
-      next: (uploadResponse) => {
-        if (!uploadResponse.success || !uploadResponse.data?.url) {
+      next: (uploadEvent) => {
+        if (!uploadEvent.done) {
+          this.uploadProgress = uploadEvent.progress;
+          return;
+        }
+
+        const uploadedData = uploadEvent.data;
+        if (!uploadedData?.url) {
           this.isSending = false;
           this.isUploadingAttachment = false;
+          this.uploadProgress = 0;
           this.markPendingMessageFailed(localPendingId);
           return;
         }
 
-        this.chatService.sendFile({
+        this.resolvePendingMessage(localPendingId, localPendingId, {
+          fileUrl: uploadedData.url,
+          filename: uploadedData.filename,
+          mimeType: uploadedData.mimeType,
+        });
+
+        const sendPayload: SendFileRequest = {
           to: conversation.phoneNumber,
-          fileUrl: uploadResponse.data.url,
-          filename: uploadResponse.data.filename,
-          mimeType: uploadResponse.data.mimeType,
-        }).pipe(takeUntil(this.destroy$)).subscribe({
+          fileUrl: uploadedData.url,
+          filename: uploadedData.filename,
+          mimeType: uploadedData.mimeType,
+        };
+
+        this.chatService.sendFile(sendPayload).pipe(takeUntil(this.destroy$)).subscribe({
           next: (sendResponse) => {
             this.isSending = false;
             this.isUploadingAttachment = false;
+            this.uploadProgress = 0;
             this.resolvePendingMessage(localPendingId, sendResponse.data?.messageId, {
-              fileUrl: uploadResponse.data?.url,
-              filename: uploadResponse.data?.filename,
-              mimeType: uploadResponse.data?.mimeType,
+              fileUrl: uploadedData?.url,
+              filename: uploadedData?.filename,
+              mimeType: uploadedData?.mimeType,
             });
             this.draftMessage = '';
             this.removeSelectedAttachment();
-            this.syncSelectedConversationPreview(uploadResponse.data?.filename || 'Attachment', conversation._id);
+            this.syncSelectedConversationPreview(uploadedData?.filename || 'Attachment', conversation._id);
             this.queueScrollToBottom(true);
           },
           error: () => {
             this.isSending = false;
             this.isUploadingAttachment = false;
+            this.uploadProgress = 0;
             this.markPendingMessageFailed(localPendingId);
           },
         });
@@ -615,6 +688,50 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       error: () => {
         this.isSending = false;
         this.isUploadingAttachment = false;
+        this.uploadProgress = 0;
+        this.markPendingMessageFailed(localPendingId);
+      },
+    });
+  }
+
+  private retryFailedFileMessage(message: PendingMessage): void {
+    if (!this.selectedConversation || !message.fileUrl || !message.filename) {
+      return;
+    }
+
+    const localPendingId = this.buildLocalPendingMessageId();
+    this.retryingMessageId = message.messageId;
+
+    this.addOptimisticOutgoingFileMessage(
+      this.selectedConversation,
+      {
+        file: new File([], message.filename, { type: message.mimeType || 'application/octet-stream' }),
+        name: message.filename,
+        mimeType: message.mimeType || '',
+      },
+      localPendingId,
+      message.text || message.filename
+    );
+
+    this.resolvePendingMessage(localPendingId, localPendingId, {
+      fileUrl: message.fileUrl,
+      filename: message.filename,
+      mimeType: message.mimeType,
+    });
+    this.queueScrollToBottom(true);
+
+    this.chatService.sendFile({
+      to: this.selectedConversation.phoneNumber,
+      fileUrl: message.fileUrl,
+      filename: message.filename,
+      mimeType: message.mimeType,
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (response) => {
+        this.retryingMessageId = null;
+        this.resolvePendingMessage(localPendingId, response.data?.messageId);
+      },
+      error: () => {
+        this.retryingMessageId = null;
         this.markPendingMessageFailed(localPendingId);
       },
     });

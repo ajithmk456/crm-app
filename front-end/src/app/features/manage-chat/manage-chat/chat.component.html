@@ -85,6 +85,15 @@
           <article class="bubble" [class.pending]="message.isPending">
             <ng-container *ngIf="isFileMessage(message); else textMessageTpl">
               <div class="file-message-card">
+                <a
+                  *ngIf="isImageFileMessage(message) && message.fileUrl"
+                  class="image-preview-link"
+                  [href]="message.fileUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <img class="image-preview" [src]="message.fileUrl" [alt]="message.filename || 'Image attachment'">
+                </a>
                 <div class="file-message-header">
                   <i class="fa-solid" [ngClass]="getFileIconClass(message)"></i>
                   <span class="file-name">{{ message.filename || message.text }}</span>
@@ -113,9 +122,10 @@
                     <button
                       type="button"
                       class="retry-button"
+                      [disabled]="!canRetryMessage(message) || retryingMessageId === message.messageId"
                       (click)="retryFailedMessage(message)"
                     >
-                      Retry
+                      {{ retryingMessageId === message.messageId ? 'Retrying...' : 'Retry' }}
                     </button>
                   </span>
                 </ng-container>
@@ -169,6 +179,9 @@
             placeholder="Type a message"
             (keydown)="onComposerKeydown($event)"
           ></textarea>
+          <div class="upload-progress" *ngIf="isUploadingAttachment">
+            Uploading... {{ uploadProgress }}%
+          </div>
         </div>
         <button
           type="button"
