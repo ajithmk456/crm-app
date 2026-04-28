@@ -219,7 +219,7 @@ exports.handleWebhook = async (req, res, next) => {
   }
 };
 
-exports.handleGupshupWebhook = (req, res) => {
+exports.handleGupshupWebhook = async (req, res) => {
   try {
     // Return HTTP 200 immediately so the provider receives acknowledgement quickly.
     res.status(200).json({ success: true, message: 'Gupshup webhook received' });
@@ -237,7 +237,7 @@ exports.handleGupshupWebhook = (req, res) => {
     const text = payload.text || payload.body || nestedPayload.text || nestedPayload.body || '';
     const reason = payload.reason || nestedPayload.reason || null;
 
-    const storedEvent = processGupshupWebhook(body);
+    const storedEvent = await processGupshupWebhook(body);
 
     const eventLog = {
       receivedAt: new Date().toISOString(),

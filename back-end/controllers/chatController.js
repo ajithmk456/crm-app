@@ -22,7 +22,7 @@ exports.sendChatMessage = async (req, res, next) => {
     const result = await sendGupshupTextMessage({ to, message });
     const messageId = result.messageId || `local-${Date.now()}`;
 
-    saveMessage({
+    await saveMessage({
       messageId,
       phone: to,
       text: message,
@@ -83,7 +83,7 @@ exports.sendChatFile = async (req, res, next) => {
     });
     const messageId = result.messageId || `local-file-${Date.now()}`;
 
-    saveMessage({
+    await saveMessage({
       messageId,
       phone: to,
       text: filename,
@@ -118,7 +118,7 @@ exports.sendChatFile = async (req, res, next) => {
 
 // POST /webhook/gupshup helper
 // Normalizes and stores incoming/status events from Gupshup webhook payload.
-exports.processGupshupWebhook = (body) => {
+exports.processGupshupWebhook = async (body) => {
   const payload = body?.payload || {};
   const nestedPayload = payload?.payload || {};
   const sender = payload?.sender || {};
@@ -277,7 +277,7 @@ exports.processGupshupWebhook = (body) => {
   const isIncomingEvent = eventType.includes('message') || (!isStatusUpdate && (Boolean(displayText) || isMediaType || Boolean(attachmentUrl)));
 
   if (isStatusUpdate) {
-    const updated = updateMessageStatus({
+    const updated = await updateMessageStatus({
       messageId,
       status,
       destination,
@@ -305,7 +305,7 @@ exports.processGupshupWebhook = (body) => {
       return null;
     }
 
-    const saved = saveMessage({
+    const saved = await saveMessage({
       messageId: messageId || `incoming-${Date.now()}`,
       phone,
       text: displayText,
@@ -345,7 +345,7 @@ exports.getChatByPhone = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'phone is required.' });
     }
 
-    const messages = getMessagesByPhone(phone).map((item) => ({
+    const messages = (await getMessagesByPhone(phone)).map((item) => ({
       phone: item.phone,
       text: item.text,
       type: item.type || 'text',
@@ -371,7 +371,7 @@ exports.getChatByPhone = async (req, res, next) => {
 // Returns chat conversation summaries for sidebar listing.
 exports.getChatConversations = async (req, res, next) => {
   try {
-    const conversations = getConversationSummaries().map((item) => ({
+    const conversations = (await getConversationSummaries()).map((item) => ({
       ...item,
       updatedAt: new Date(item.updatedAt).toISOString(),
     }));

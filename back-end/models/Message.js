@@ -33,14 +33,29 @@ const messageSchema = new mongoose.Schema(
       default: 'text',
       trim: true,
     },
+    fileUrl: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    filename: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    mimeType: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     direction: {
       type: String,
-      enum: ['incoming', 'outgoing'],
+      enum: ['incoming', 'outgoing', 'in', 'out'],
       required: true,
     },
     status: {
       type: String,
-      enum: ['sent', 'delivered', 'read'],
+      enum: ['sent', 'delivered', 'read', 'failed'],
       default: 'sent',
     },
     timestamp: {

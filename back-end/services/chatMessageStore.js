@@ -1,6 +1,5 @@
-// In-memory message store for quick chat debugging and lightweight deployments.
-// Replace with Mongo persistence later if long-term history is required.
-const chatMessages = [];
+const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
 
 const normalizePhone = (value) => {
   if (!value) {
@@ -36,45 +35,94 @@ const toDate = (value) => {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 };
 
-const findBestOutgoingMatch = ({ phone, timestamp }) => {
+const buildPreviewText = (message) => {
+  return String(message.filename || message.text || '').trim();
+};
+
+const findOrCreateConversation = async (phone, previewText = '') => {
   if (!phone) {
+    return null;
+  }
+
+  const update = previewText ? { lastMessage: previewText } : {};
+  return Conversation.findOneAndUpdate(
+    { phoneNumber: phone },
+    {
+      $set: update,
+      $setOnInsert: { phoneNumber: phone },
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+    }
+  );
+};
+
+const buildDirectionalEndpoints = (normalized) => {
+  const phone = normalized.phone || normalized.destination || normalized.source;
+  const isOutgoing = normalized.direction === 'out';
+
+  return {
+    phone,
+    from: normalized.source || (isOutgoing ? 'business' : phone),
+    to: normalized.destination || (isOutgoing ? phone : 'business'),
+  };
+};
+
+const toMessageView = (messageDoc, phoneNumber) => ({
+  messageId: messageDoc.messageId,
+  phone: phoneNumber,
+  text: messageDoc.text || '',
+  type: messageDoc.type || 'text',
+  fileUrl: messageDoc.fileUrl || '',
+  filename: messageDoc.filename || '',
+  mimeType: messageDoc.mimeType || '',
+  direction: messageDoc.direction || 'out',
+  status: messageDoc.status || 'sent',
+  timestamp: messageDoc.timestamp || messageDoc.createdAt,
+});
+
+const findBestOutgoingMatch = async ({ phone, timestamp }) => {
+  if (!phone) {
+    return null;
+  }
+
+  const conversation = await Conversation.findOne({ phoneNumber: phone }).select('_id');
+  if (!conversation?._id) {
     return null;
   }
 
   const statusTime = toDate(timestamp).getTime();
   const windowMs = 15 * 60 * 1000;
+  const windowStart = new Date(statusTime - windowMs);
+  const windowEnd = new Date(statusTime + windowMs);
+
+  const candidates = await Message.find({
+    conversationId: conversation._id,
+    direction: { $in: ['out', 'outgoing'] },
+    timestamp: { $gte: windowStart, $lte: windowEnd },
+  }).sort({ timestamp: -1 });
+
   let best = null;
   let bestDelta = Number.MAX_SAFE_INTEGER;
-
-  for (const item of chatMessages) {
-    if (item.direction !== 'out') {
+  for (const item of candidates) {
+    const hasRenderableContent = Boolean(String(item.text || item.filename || '').trim());
+    if (!hasRenderableContent) {
       continue;
     }
 
-    const hasText = Boolean(String(item.text || '').trim());
-    if (!hasText) {
-      continue;
+    const delta = Math.abs(statusTime - toDate(item.timestamp).getTime());
+    if (delta < bestDelta) {
+      best = item;
+      bestDelta = delta;
     }
-
-    const samePhone = item.phone === phone || item.destination === phone || item.source === phone;
-    if (!samePhone) {
-      continue;
-    }
-
-    const itemTime = toDate(item.timestamp).getTime();
-    const delta = Math.abs(statusTime - itemTime);
-    if (delta > windowMs || delta >= bestDelta) {
-      continue;
-    }
-
-    best = item;
-    bestDelta = delta;
   }
 
   return best;
 };
 
-const saveMessage = (message) => {
+const saveMessage = async (message) => {
   const normalized = {
     messageId: message.messageId || '',
     phone: normalizePhone(message.phone),
@@ -91,36 +139,50 @@ const saveMessage = (message) => {
     reason: message.reason ? String(message.reason) : undefined,
   };
 
+  const previewText = buildPreviewText(normalized);
+  const endpoints = buildDirectionalEndpoints(normalized);
+  const phone = normalized.phone || endpoints.phone;
+  const conversation = await findOrCreateConversation(phone, previewText);
+
   if (normalized.messageId) {
-    const existingIndex = chatMessages.findIndex((item) => item.messageId === normalized.messageId);
-    if (existingIndex !== -1) {
-      const existing = chatMessages[existingIndex];
-      chatMessages[existingIndex] = {
-        ...existing,
-        ...normalized,
-        // Preserve key fields when webhook payload omits or sends blank values.
-        phone: existing.phone || normalized.phone,
-        source: existing.source || normalized.source,
-        destination: existing.destination || normalized.destination,
-        // Keep previously-established direction to avoid webhook echo flipping out->in.
-        direction: existing.direction || normalized.direction,
-        status: normalized.status || existing.status,
-        // Preserve existing text when a status event has no text.
-        text: normalized.text || existing.text,
-        type: normalized.type || existing.type || 'text',
-        fileUrl: normalized.fileUrl || existing.fileUrl,
-        filename: normalized.filename || existing.filename,
-        mimeType: normalized.mimeType || existing.mimeType,
-      };
-      return chatMessages[existingIndex];
+    const existing = await Message.findOne({ messageId: normalized.messageId });
+    if (existing) {
+      existing.conversationId = conversation?._id || existing.conversationId;
+      existing.from = existing.from || endpoints.from;
+      existing.to = existing.to || endpoints.to;
+      existing.text = normalized.text || existing.text;
+      existing.type = normalized.type || existing.type || 'text';
+      existing.fileUrl = normalized.fileUrl || existing.fileUrl;
+      existing.filename = normalized.filename || existing.filename;
+      existing.mimeType = normalized.mimeType || existing.mimeType;
+      existing.direction = existing.direction || normalized.direction;
+      existing.status = normalized.status || existing.status;
+      existing.timestamp = normalized.timestamp || existing.timestamp;
+      await existing.save();
+      return toMessageView(existing, phone);
     }
   }
 
-  chatMessages.push(normalized);
-  return normalized;
+  const created = await Message.create({
+    messageId: normalized.messageId || `chat-${Date.now()}`,
+    conversationId: conversation?._id,
+    from: endpoints.from,
+    to: endpoints.to,
+    text: normalized.text,
+    type: normalized.type || 'text',
+    fileUrl: normalized.fileUrl,
+    filename: normalized.filename,
+    mimeType: normalized.mimeType,
+    direction: normalized.direction,
+    status: normalized.status,
+    timestamp: normalized.timestamp,
+    replyTo: undefined,
+  });
+
+  return toMessageView(created, phone);
 };
 
-const updateMessageStatus = ({ messageId, status, destination, source, timestamp, reason, phone }) => {
+const updateMessageStatus = async ({ messageId, status, destination, source, timestamp, reason, phone }) => {
   const normalizedMessageId = String(messageId || '').trim();
   const normalizedDestination = normalizePhone(destination);
   const normalizedSource = normalizePhone(source);
@@ -132,41 +194,46 @@ const updateMessageStatus = ({ messageId, status, destination, source, timestamp
     return null;
   }
 
-  const existing = chatMessages.find((item) => item.messageId === normalizedMessageId);
+  const existing = await Message.findOne({ messageId: normalizedMessageId });
   if (existing) {
     existing.status = normalizedStatus;
     existing.timestamp = toDate(timestamp);
-    existing.destination = normalizedDestination || existing.destination;
-    existing.source = normalizedSource || existing.source;
-    existing.phone = existing.phone || normalizedDestination || normalizedSource;
+    existing.to = normalizedDestination || existing.to;
+    existing.from = normalizedSource || existing.from;
     if (reason) {
       existing.reason = String(reason);
     }
-    return existing;
+    await existing.save();
+    const conversation = await Conversation.findById(existing.conversationId).select('phoneNumber');
+    return toMessageView(existing, conversation?.phoneNumber || targetPhone);
   }
 
   // Gupshup can send different IDs for status callbacks than send responses.
   // Match by phone + timestamp window so one outgoing bubble progresses sent/delivered/read.
-  const matchedOutgoing = findBestOutgoingMatch({
+  const matchedOutgoing = await findBestOutgoingMatch({
     phone: targetPhone,
     timestamp,
   });
   if (matchedOutgoing) {
     matchedOutgoing.status = normalizedStatus;
     matchedOutgoing.timestamp = toDate(timestamp);
-    matchedOutgoing.destination = normalizedDestination || matchedOutgoing.destination;
-    matchedOutgoing.source = normalizedSource || matchedOutgoing.source;
-    matchedOutgoing.phone = matchedOutgoing.phone || targetPhone;
+    matchedOutgoing.to = normalizedDestination || matchedOutgoing.to;
+    matchedOutgoing.from = normalizedSource || matchedOutgoing.from;
     if (reason) {
       matchedOutgoing.reason = String(reason);
     }
-    return matchedOutgoing;
+    await matchedOutgoing.save();
+    const conversation = await Conversation.findById(matchedOutgoing.conversationId).select('phoneNumber');
+    return toMessageView(matchedOutgoing, conversation?.phoneNumber || targetPhone);
   }
 
   // If we receive a status before the send API response is stored, create a fallback message.
-  const fallback = {
+  const conversation = await findOrCreateConversation(targetPhone, '');
+  const fallback = await Message.create({
     messageId: normalizedMessageId,
-    phone: targetPhone,
+    conversationId: conversation?._id,
+    from: normalizedSource || 'business',
+    to: normalizedDestination || targetPhone,
     text: '',
     type: 'text',
     fileUrl: '',
@@ -175,51 +242,36 @@ const updateMessageStatus = ({ messageId, status, destination, source, timestamp
     direction: 'out',
     status: normalizedStatus,
     timestamp: toDate(timestamp),
-    source: normalizedSource,
-    destination: normalizedDestination,
-    reason: reason ? String(reason) : undefined,
-  };
+    replyTo: undefined,
+  });
 
-  chatMessages.push(fallback);
-  return fallback;
+  return toMessageView(fallback, targetPhone);
 };
 
-const getMessagesByPhone = (phone) => {
+const getMessagesByPhone = async (phone) => {
   const normalizedPhone = normalizePhone(phone);
-  return chatMessages
-    .filter((item) => item.phone === normalizedPhone || item.source === normalizedPhone || item.destination === normalizedPhone)
-    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-};
-
-const getConversationSummaries = () => {
-  const byPhone = new Map();
-
-  for (const message of chatMessages) {
-    const phone = normalizePhone(message.phone || message.source || message.destination);
-    if (!phone) {
-      continue;
-    }
-
-    const existing = byPhone.get(phone);
-    if (!existing) {
-      byPhone.set(phone, {
-        _id: phone,
-        phoneNumber: phone,
-        lastMessage: message.text || '',
-        updatedAt: new Date(message.timestamp || new Date()),
-      });
-      continue;
-    }
-
-    const existingTime = new Date(existing.updatedAt).getTime();
-    const currentTime = new Date(message.timestamp || new Date()).getTime();
-    if (currentTime >= existingTime) {
-      existing.lastMessage = message.text || existing.lastMessage;
-      existing.updatedAt = new Date(message.timestamp || new Date());
-    }
+  if (!normalizedPhone) {
+    return [];
   }
 
-  return Array.from(byPhone.values()).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  const conversation = await Conversation.findOne({ phoneNumber: normalizedPhone }).select('_id phoneNumber');
+  if (!conversation?._id) {
+    return [];
+  }
+
+  const messages = await Message.find({ conversationId: conversation._id }).sort({ timestamp: 1 });
+  return messages.map((item) => toMessageView(item, conversation.phoneNumber));
+};
+
+const getConversationSummaries = async () => {
+  const conversations = await Conversation.find({}).sort({ updatedAt: -1 }).lean();
+  return conversations.map((item) => ({
+    _id: item.phoneNumber,
+    phoneNumber: item.phoneNumber,
+    lastMessage: item.lastMessage || '',
+    updatedAt: item.updatedAt,
+    createdAt: item.createdAt,
+  }));
 };
 
 module.exports = {
@@ -229,6 +281,4 @@ module.exports = {
   updateMessageStatus,
   getMessagesByPhone,
   getConversationSummaries,
-  // Exposed only for temporary debugging/testing.
-  chatMessages,
 };
