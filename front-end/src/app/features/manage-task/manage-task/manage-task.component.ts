@@ -85,14 +85,33 @@ export class ManageTaskComponent {
       this.applyFilters();
     });
 
+    this.applyTaskPrefillFromNavigationState();
+
     this.route.queryParams.subscribe((params) => {
-      if (params['customerName'] || params['customerPhone']) {
+      if (params['customerName'] || params['customerPhone'] || params['taskTitle'] || params['taskDescription']) {
         this.openAddTask();
         this.taskForm.patchValue({
+          title: params['taskTitle'] || '',
+          description: params['taskDescription'] || '',
           customerName: params['customerName'] || '',
           customerPhone: params['customerPhone'] || ''
         });
       }
+    });
+  }
+
+  private applyTaskPrefillFromNavigationState(): void {
+    const prefill = window.history.state?.taskPrefill;
+    if (!prefill || typeof prefill !== 'object') {
+      return;
+    }
+
+    this.openAddTask();
+    this.taskForm.patchValue({
+      title: prefill.title || '',
+      description: prefill.description || '',
+      customerName: prefill.customerName || '',
+      customerPhone: prefill.customerPhone || '',
     });
   }
 

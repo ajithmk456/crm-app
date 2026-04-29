@@ -589,6 +589,76 @@
   }
 }
 
+.message-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+}
+
+.message-row.outgoing .message-actions {
+  right: 8px;
+}
+
+.message-menu-trigger {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.78);
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+
+  i {
+    font-size: 12px;
+  }
+}
+
+.bubble:hover .message-menu-trigger,
+.message-menu-trigger:focus-visible {
+  opacity: 1;
+}
+
+.message-menu {
+  position: absolute;
+  top: 28px;
+  right: 0;
+  min-width: 148px;
+  background: #fff;
+  border: 1px solid #dbe2ea;
+  border-radius: 8px;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.15);
+  padding: 4px;
+}
+
+.message-menu-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  color: #111b21;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  i {
+    color: #2563eb;
+  }
+
+  &:hover {
+    background: #f1f5f9;
+  }
+}
+
 .file-message-card {
   display: flex;
   flex-direction: column;

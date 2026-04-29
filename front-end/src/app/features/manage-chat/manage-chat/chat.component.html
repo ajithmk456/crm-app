@@ -155,6 +155,26 @@
           [class.image-row]="isImageFileMessage(message)"
         >
           <article class="bubble" [class.pending]="message.isPending">
+            <div class="message-actions">
+              <button
+                type="button"
+                class="message-menu-trigger"
+                (click)="toggleMessageMenu(message, $event)"
+                aria-label="Message options"
+              >
+                <i class="fa-solid fa-ellipsis-vertical"></i>
+              </button>
+              <div class="message-menu" *ngIf="activeMessageMenuId === getMessageMenuId(message)">
+                <button
+                  type="button"
+                  class="message-menu-item"
+                  (click)="createTaskFromMessage(message, $event)"
+                >
+                  <i class="fa-solid fa-list-check"></i>
+                  <span>Create Task</span>
+                </button>
+              </div>
+            </div>
             <ng-container *ngIf="isFileMessage(message); else textMessageTpl">
               <div class="file-message-card">
                 <button

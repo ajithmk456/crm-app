@@ -1,9 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { ActivatedRoute } from '@angular/router';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { Subject, interval, of } from 'rxjs';
 import { catchError, startWith, switchMap, takeUntil } from 'rxjs/operators';
@@ -72,6 +71,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   activeFileViewerResourceUrl: SafeResourceUrl | null = null;
   showAttachmentMenu = false;
   showEmojiPicker = false;
+  activeMessageMenuId: string | null = null;
   readonly quickEmojis = ['😀', '😂', '😊', '😍', '👍', '🙏', '🔥', '🎉', '❤️', '✅', '📌', '👋'];
 
   private readonly destroy$ = new Subject<void>();
@@ -559,6 +559,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   onMessageStreamScroll(): void {
+    this.activeMessageMenuId = null;
+
     if (!this.isNearBottom()) {
       return;
     }
@@ -617,6 +619,48 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
         this.markPendingMessageFailed(localPendingId);
       },
     });
+  }
+
+  toggleMessageMenu(message: PendingMessage, event: Event): void {
+    event.stopPropagation();
+    const menuId = this.getMessageMenuId(message);
+    this.activeMessageMenuId = this.activeMessageMenuId === menuId ? null : menuId;
+  }
+
+  closeMessageMenu(event?: Event): void {
+    event?.stopPropagation();
+    this.activeMessageMenuId = null;
+  }
+
+  createTaskFromMessage(message: PendingMessage, event: Event): void {
+    event.stopPropagation();
+    this.activeMessageMenuId = null;
+
+    const conversation = this.selectedConversation;
+    if (!conversation) {
+      return;
+    }
+
+    const rawText = String(message.text || message.filename || '').trim();
+    const description = rawText || 'Follow up with customer from WhatsApp chat.';
+    const title = this.buildTaskTitleFromMessage(description);
+    const customerName = String(conversation.clientName || '').trim();
+    const customerPhone = String(conversation.phoneNumber || '').trim();
+
+    this.router.navigate(['/manage-task'], {
+      state: {
+        taskPrefill: {
+          title,
+          description,
+          customerName,
+          customerPhone,
+        },
+      },
+    });
+  }
+
+  getMessageMenuId(message: PendingMessage): string {
+    return message.messageId || message._id || `${message.timestamp}-${message.text}`;
   }
 
   isFileMessage(message: PendingMessage): boolean {
@@ -788,6 +832,16 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     return 'application/octet-stream';
   }
 
+  private buildTaskTitleFromMessage(messageText: string): string {
+    const compactText = String(messageText || '').replace(/\s+/g, ' ').trim();
+    if (!compactText) {
+      return 'WhatsApp follow-up';
+    }
+
+    const clipped = compactText.length > 56 ? `${compactText.slice(0, 53)}...` : compactText;
+    return `Follow up: ${clipped}`;
+  }
+
   private startConversationPolling(): void {
     interval(4000).pipe(
       startWith(0),
@@ -855,6 +909,11 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.selectConversation(match);
     return true;
+  }
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.activeMessageMenuId = null;
   }
 
   private startMessagePolling(): void {
