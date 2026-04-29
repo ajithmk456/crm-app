@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { ActivatedRoute } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { Subject, interval, of } from 'rxjs';
 import { catchError, startWith, switchMap, takeUntil } from 'rxjs/operators';
@@ -217,13 +218,26 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   private pendingMessages: PendingMessage[] = [];
   private outgoingFileCaptionByMessageId: Record<string, string> = {};
   private forceScrollOnNextMessageUpdate = false;
+  private targetConversationPhone = '';
 
   constructor(
     private readonly chatService: ChatService,
     private readonly sanitizer: DomSanitizer,
+    private readonly route: ActivatedRoute,
   ) {}
 
   ngOnInit(): void {
+    this.route.queryParamMap
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((params) => {
+        this.targetConversationPhone = this.normalizePhone(params.get('phone') || '');
+        if (!this.targetConversationPhone) {
+          return;
+        }
+
+        this.trySelectTargetConversation();
+      });
+
     this.startConversationPolling();
     this.startMessagePolling();
     this.startRealtimeUpdates();
@@ -781,6 +795,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
 
+      if (this.trySelectTargetConversation()) {
+        return;
+      }
+
       if (previousSelectionId) {
         const refreshedSelection = this.conversations.find((item) => item._id === previousSelectionId);
         if (refreshedSelection) {
@@ -793,6 +811,28 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
         this.selectConversation(this.conversations[0]);
       }
     });
+  }
+
+  private trySelectTargetConversation(): boolean {
+    if (!this.targetConversationPhone || !this.conversations.length) {
+      return false;
+    }
+
+    const match = this.conversations.find((conversation) => {
+      return this.normalizePhone(conversation.phoneNumber) === this.targetConversationPhone;
+    });
+
+    if (!match) {
+      return false;
+    }
+
+    this.targetConversationPhone = '';
+    if (this.selectedConversation?._id === match._id) {
+      return true;
+    }
+
+    this.selectConversation(match);
+    return true;
   }
 
   private startMessagePolling(): void {
