@@ -17,12 +17,42 @@
       <span class="meta-item"><i class="fa-regular fa-user"></i> {{ employeeLabel }}</span>
     </div>
 
-    <button type="button" class="details-toggle" *ngIf="hasDetails" (click)="onToggle()">
-      {{ expanded ? 'Hide details' : 'View details' }}
+    <button type="button" class="details-toggle" *ngIf="hasExpandableContent" (click)="onToggle()">
+      {{ expanded ? 'Hide Details' : 'View Details' }}
       <i class="fa-solid" [ngClass]="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
     </button>
 
-    <div class="details" *ngIf="expanded && hasDetails">
+    <div class="details" *ngIf="expanded && hasExpandableContent">
+      <div class="detail-row" *ngIf="item.description">
+        <span class="k">Description</span>
+        <span class="v">{{ item.description }}</span>
+      </div>
+
+      <div class="detail-row" *ngIf="taskName">
+        <span class="k">Task</span>
+        <span class="v">{{ taskName }}</span>
+      </div>
+
+      <div class="detail-row" *ngIf="taskStatus">
+        <span class="k">Task Status</span>
+        <span class="v">{{ taskStatus }}</span>
+      </div>
+
+      <div class="detail-row" *ngIf="assignedUser">
+        <span class="k">Assigned User</span>
+        <span class="v">{{ assignedUser }}</span>
+      </div>
+
+      <div class="detail-row" *ngIf="messageContent">
+        <span class="k">Message</span>
+        <span class="v">{{ messageContent }}</span>
+      </div>
+
+      <div class="detail-row" *ngIf="paymentSummary">
+        <span class="k">Payment</span>
+        <span class="v">{{ paymentSummary }}</span>
+      </div>
+
       <div class="detail-row" *ngFor="let pair of metadata">
         <span class="k">{{ pair.key }}</span>
         <span class="v">{{ pair.value }}</span>

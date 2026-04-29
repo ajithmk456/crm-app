@@ -344,6 +344,8 @@ exports.updateTask = async (req, res, next) => {
         return res.status(400).json({ success: false, message: 'Valid status is required.' });
       }
 
+      const previousStatus = String(task.status || '');
+      const previousReportSent = !!task.reportSent;
       const nextReportSent = status === 'Report Sent' ? true : (reportSent !== undefined ? !!reportSent : !!task.reportSent);
       if (status === 'Completed' && !nextReportSent) {
         return res.status(400).json({ success: false, message: 'Mark report as sent before completing the task.' });
@@ -374,15 +376,19 @@ exports.updateTask = async (req, res, next) => {
           });
         }
 
-        if (String(task.status || '') === 'Report Sent' || !!task.reportSent) {
+        const reportJustSubmitted =
+          (previousStatus !== 'Report Sent' && String(task.status || '') === 'Report Sent')
+          || (!previousReportSent && !!task.reportSent);
+
+        if (reportJustSubmitted) {
           await logActivity({
             type: 'report',
-            title: 'Report Submitted',
+            title: 'Report Send',
             referenceId: String(task._id),
             taskId: task._id,
             clientId: resolvedClientId,
             employeeId: task.assignedTo,
-            description: `Report submitted for task: ${task.title}`,
+            description: `Report send for task: ${task.title}`,
             metadata: {
               status: task.status,
               reportSent: !!task.reportSent,
@@ -399,6 +405,7 @@ exports.updateTask = async (req, res, next) => {
     
     const previousAssignedTo = String(task.assignedTo || '');
     const previousStatus = String(task.status || '');
+    const previousReportSent = !!task.reportSent;
     const dueDateChanged = dueDate && task.dueDate?.getTime() !== new Date(dueDate).getTime();
     const reminderChanged = reminderEnabled !== undefined || reminderBefore !== undefined;
 
@@ -462,17 +469,17 @@ exports.updateTask = async (req, res, next) => {
 
       const reportJustSubmitted =
         (previousStatus !== 'Report Sent' && nextStatus === 'Report Sent')
-        || (reportSent !== undefined && !!reportSent);
+        || (!previousReportSent && !!task.reportSent);
 
       if (reportJustSubmitted) {
         await logActivity({
           type: 'report',
-          title: 'Report Submitted',
+          title: 'Report Send',
           referenceId: String(task._id),
           taskId: task._id,
           clientId: resolvedClientId,
           employeeId: task.assignedTo,
-          description: `Report submitted for task: ${task.title}`,
+          description: `Report send for task: ${task.title}`,
           metadata: {
             status: nextStatus,
             reportSent: !!task.reportSent,
@@ -571,26 +578,6 @@ exports.addTaskAttachment = async (req, res, next) => {
 
     await task.save();
     const updatedTask = await Task.findById(task._id).populate('assignedTo', 'fullName email phone');
-
-    try {
-      await logActivity({
-        type: 'report',
-        title: 'Report Submitted',
-        referenceId: String(task._id),
-        taskId: task._id,
-        clientId: task.customerPhone ? await resolveClientIdByPhone(task.customerPhone) : null,
-        employeeId: task.assignedTo,
-        description: `Proof attached: ${fileName}`,
-        metadata: {
-          attachmentUrl: url,
-          mimeType: mimeType || '',
-          note: note || '',
-        },
-        adminOwner: task.adminOwner,
-      });
-    } catch (_) {
-      // Keep attachment flow resilient if history logging fails.
-    }
 
     return res.status(200).json({ success: true, data: updatedTask });
   } catch (error) {

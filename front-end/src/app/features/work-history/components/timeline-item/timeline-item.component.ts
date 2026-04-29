@@ -27,7 +27,71 @@ export class TimelineItemComponent {
     return this.metadata.length > 0;
   }
 
+  get hasExpandableContent(): boolean {
+    return Boolean(
+      this.item?.description ||
+      this.taskName ||
+      this.taskStatus ||
+      this.assignedUser ||
+      this.messageContent ||
+      this.paymentSummary ||
+      this.hasDetails,
+    );
+  }
+
+  get taskName(): string {
+    if (this.item?.taskId && typeof this.item.taskId === 'object') {
+      return this.item.taskId.title || '';
+    }
+
+    return this.metaValue(['taskName', 'taskTitle', 'title']);
+  }
+
+  get taskStatus(): string {
+    return this.metaValue(['taskStatus', 'status']);
+  }
+
+  get assignedUser(): string {
+    if (this.item?.employeeId && typeof this.item.employeeId === 'object') {
+      return this.item.employeeId.fullName || this.item.employeeId.email || '';
+    }
+
+    return this.metaValue(['assignedTo', 'employee', 'employeeName']);
+  }
+
+  get messageContent(): string {
+    return this.metaValue(['message', 'messageContent', 'content', 'text']);
+  }
+
+  get paymentSummary(): string {
+    const amount = this.metaValue(['amount', 'paymentAmount']);
+    const mode = this.metaValue(['paymentMode', 'mode']);
+    const status = this.metaValue(['paymentStatus', 'status']);
+    const reference = this.metaValue(['reference', 'transactionId']);
+
+    const parts = [amount ? `Amount: ${amount}` : '', mode ? `Mode: ${mode}` : '', status ? `Status: ${status}` : '', reference ? `Ref: ${reference}` : '']
+      .filter(Boolean);
+
+    return parts.join(' | ');
+  }
+
   onToggle(): void {
     this.toggle.emit();
+  }
+
+  private metaValue(keys: string[]): string {
+    const meta = this.item?.metadata;
+    if (!meta) {
+      return '';
+    }
+
+    for (const key of keys) {
+      const value = meta[key];
+      if (value !== undefined && value !== null && String(value).trim()) {
+        return String(value);
+      }
+    }
+
+    return '';
   }
 }

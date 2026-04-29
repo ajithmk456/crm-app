@@ -63,6 +63,23 @@ const logActivity = async ({
     return null;
   }
 
+  const dedupeSince = new Date(Date.now() - (60 * 1000));
+  const existing = await ActivityHistory.findOne({
+    type,
+    title,
+    referenceId: String(referenceId),
+    taskId: taskId || null,
+    clientId: clientId || null,
+    employeeId: employeeId || null,
+    description: description || '',
+    adminOwner: adminOwner || null,
+    createdAt: { $gte: dedupeSince },
+  }).select('_id');
+
+  if (existing?._id) {
+    return existing;
+  }
+
   return ActivityHistory.create({
     type,
     title,

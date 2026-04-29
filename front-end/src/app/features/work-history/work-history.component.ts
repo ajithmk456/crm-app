@@ -12,6 +12,20 @@ interface HistoryGroup {
   items: WorkHistoryItem[];
 }
 
+interface TaskMasterGroup {
+  taskId: string;
+  taskTitle: string;
+  latestEvent: WorkHistoryItem;
+  events: WorkHistoryItem[];
+}
+
+interface EventTypeGroup {
+  label: string;
+  count: number;
+  latestAt: string;
+  items: WorkHistoryItem[];
+}
+
 @Component({
   selector: 'app-work-history',
   standalone: true,
@@ -30,6 +44,8 @@ export class WorkHistoryComponent implements OnInit {
   toDate = '';
   isLoading = false;
   expandedId: string | null = null;
+  taskDetailsExpanded = false;
+  expandedTaskGroupId: string | null = null;
 
   constructor(
     private readonly historyService: WorkHistoryService,
@@ -61,24 +77,87 @@ export class WorkHistoryComponent implements OnInit {
       }));
   }
 
-  get totalTasks(): number {
-    return this.tasks.length;
+  get isTaskFocusedView(): boolean {
+    return Boolean(this.selectedTaskId);
   }
 
-  get completedTasks(): number {
-    return this.tasks.filter((task) => task.status === 'Completed').length;
+  get isAllTasksMasterView(): boolean {
+    return !this.selectedTaskId;
   }
 
-  get pendingTasks(): number {
-    return this.tasks.filter((task) => task.status !== 'Completed').length;
-  }
-
-  get lastActivityTime(): string {
-    const latest = this.items[0]?.createdAt;
-    if (!latest) {
-      return '-';
+  get taskMasterGroups(): TaskMasterGroup[] {
+    if (!this.isAllTasksMasterView) {
+      return [];
     }
-    return this.formatExactTime(latest);
+
+    const groups = new Map<string, WorkHistoryItem[]>();
+
+    this.items.forEach((item) => {
+      const taskId = this.getTaskId(item);
+      if (!taskId) {
+        return;
+      }
+
+      if (!groups.has(taskId)) {
+        groups.set(taskId, []);
+      }
+
+      groups.get(taskId)?.push(item);
+    });
+
+    const sortedGroups: TaskMasterGroup[] = [];
+
+    groups.forEach((events, taskId) => {
+      const sortedEvents = [...events].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+
+      const latestEvent = sortedEvents[0];
+      if (!latestEvent) {
+        return;
+      }
+
+      sortedGroups.push({
+        taskId,
+        taskTitle: this.getTaskTitle(taskId, latestEvent),
+        latestEvent,
+        events: sortedEvents,
+      });
+    });
+
+    return sortedGroups.sort(
+      (a, b) =>
+        new Date(b.latestEvent.createdAt).getTime() - new Date(a.latestEvent.createdAt).getTime(),
+    );
+  }
+
+  get selectedTaskEvents(): WorkHistoryItem[] {
+    const selectedId = this.selectedTaskId;
+    if (!selectedId) {
+      return [];
+    }
+
+    return [...this.items]
+      .filter((item) => this.getTaskId(item) === selectedId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  get mainTaskEvent(): WorkHistoryItem | null {
+    return this.selectedTaskEvents[0] || null;
+  }
+
+  get selectedTaskTitle(): string {
+    const taskFromFilter = this.tasks.find((task) => task._id === this.selectedTaskId);
+    if (taskFromFilter?.title) {
+      return taskFromFilter.title;
+    }
+
+    const mainEvent = this.mainTaskEvent;
+    if (mainEvent?.taskId && typeof mainEvent.taskId === 'object' && mainEvent.taskId.title) {
+      return mainEvent.taskId.title;
+    }
+
+    return 'Selected Task';
   }
 
   loadFilters(): void {
@@ -101,6 +180,8 @@ export class WorkHistoryComponent implements OnInit {
 
   loadHistory(): void {
     this.isLoading = true;
+    this.taskDetailsExpanded = false;
+    this.expandedTaskGroupId = null;
     this.historyService.getHistory({
       clientId: this.selectedClientId || undefined,
       taskId: this.selectedTaskId || undefined,
@@ -124,11 +205,92 @@ export class WorkHistoryComponent implements OnInit {
     this.selectedTaskId = '';
     this.fromDate = '';
     this.toDate = '';
+    this.taskDetailsExpanded = false;
+    this.expandedTaskGroupId = null;
     this.loadHistory();
   }
 
   toggleExpanded(itemId: string): void {
     this.expandedId = this.expandedId === itemId ? null : itemId;
+  }
+
+  toggleTaskDetails(): void {
+    this.taskDetailsExpanded = !this.taskDetailsExpanded;
+  }
+
+  toggleTaskGroup(taskId: string): void {
+    this.expandedTaskGroupId = this.expandedTaskGroupId === taskId ? null : taskId;
+  }
+
+  getEventGroups(events: WorkHistoryItem[]): EventTypeGroup[] {
+    const grouped = new Map<string, WorkHistoryItem[]>();
+
+    events.forEach((event) => {
+      const label = this.getTypeLabel(event);
+      if (!grouped.has(label)) {
+        grouped.set(label, []);
+      }
+      grouped.get(label)?.push(event);
+    });
+
+    const groups: EventTypeGroup[] = [];
+
+    grouped.forEach((groupItems, label) => {
+      const sortedItems = [...groupItems].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+
+      groups.push({
+        label,
+        count: sortedItems.length,
+        latestAt: sortedItems[0]?.createdAt || '',
+        items: sortedItems,
+      });
+    });
+
+    return groups.sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime());
+  }
+
+
+  getTaskId(item: WorkHistoryItem): string {
+    if (!item.taskId) {
+      return '';
+    }
+
+    if (typeof item.taskId === 'string') {
+      return item.taskId;
+    }
+
+    return item.taskId._id || '';
+  }
+
+  getTypeLabel(item: WorkHistoryItem): string {
+    switch (item.type) {
+      case 'report':
+        return 'Report Send';
+      case 'assignment':
+        return 'Task Assigned';
+      case 'task':
+        if (this.lower(item.title).includes('picked')) return 'Task Picked';
+        return 'Task Created';
+      case 'payment':
+        return 'Payment Received';
+      default:
+        return 'Activity';
+    }
+  }
+
+  getTaskTitle(taskId: string, fallbackItem?: WorkHistoryItem): string {
+    const task = this.tasks.find((entry) => entry._id === taskId);
+    if (task?.title) {
+      return task.title;
+    }
+
+    if (fallbackItem?.taskId && typeof fallbackItem.taskId === 'object' && fallbackItem.taskId.title) {
+      return fallbackItem.taskId.title;
+    }
+
+    return 'Task';
   }
 
   getColorClass(item: WorkHistoryItem): string {
@@ -280,4 +442,5 @@ export class WorkHistoryComponent implements OnInit {
   private lower(value: string): string {
     return String(value || '').toLowerCase();
   }
+
 }

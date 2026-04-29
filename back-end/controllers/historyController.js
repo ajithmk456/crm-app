@@ -4,9 +4,17 @@ const { resolveAdminScopeForRead } = require('../services/activityHistoryService
 exports.getHistory = async (req, res, next) => {
   try {
     const { clientId, taskId, fromDate, toDate, limit = '100' } = req.query;
+    const allowedTitles = [
+      'Task Created',
+      'Task Assigned',
+      'Task Picked',
+      'Report Send',
+      'Payment Received',
+    ];
 
     const query = {
       ...(await resolveAdminScopeForRead(req.user)),
+      title: { $in: allowedTitles },
     };
 
     if (clientId) {

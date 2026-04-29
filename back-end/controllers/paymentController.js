@@ -52,7 +52,7 @@ exports.addPayment = async (req, res, next) => {
 
       await logActivity({
         type: 'payment',
-        title: 'Payment Updated',
+        title: 'Payment Received',
         referenceId: String(payment._id),
         taskId: fullTask?._id,
         clientId: resolvedClientId,
