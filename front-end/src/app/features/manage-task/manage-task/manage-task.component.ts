@@ -17,10 +17,12 @@ import { DateTimePickerComponent } from '../../../shared/components/date-time-pi
 })
 export class ManageTaskComponent {
   isTaskModalOpen = false;
+  isDeleteModalOpen = false;
   isEditMode = false;
   currentUser: any = null;
   isAdmin = false;
   isEmployee = false;
+  selectedTaskId: string | null = null;
 
   tasks: Task[] = [];
   filteredTasks: Task[] = [];
@@ -357,14 +359,25 @@ export class ManageTaskComponent {
     }
   }
 
-  deleteTask(task: Task) {
-    if (!task._id || !confirm('Are you sure you want to delete this task?')) {
+  openDeleteModal(task: Task) {
+    this.selectedTaskId = task._id || null;
+    this.isDeleteModalOpen = true;
+  }
+
+  closeDeleteModal() {
+    this.isDeleteModalOpen = false;
+    this.selectedTaskId = null;
+  }
+
+  confirmDelete() {
+    if (!this.selectedTaskId) {
       return;
     }
-    this.taskService.deleteTask(task._id).subscribe({
+    this.taskService.deleteTask(this.selectedTaskId).subscribe({
       next: (res) => {
         if (res.success) {
           this.showMessage('Task deleted successfully', 'success');
+          this.closeDeleteModal();
           this.loadTasks();
         } else {
           this.showMessage(res.message || 'Failed to delete task', 'error');
