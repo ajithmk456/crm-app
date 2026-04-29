@@ -17,6 +17,7 @@ const taskSchema = new mongoose.Schema(
     reminderTime: { type: Date, description: 'Calculated reminder trigger time' },
     reminderSent: { type: Boolean, default: false },
     reminderScheduleId: { type: String, description: 'ID of scheduled cron job for cleanup' },
+    adminOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   },
   { timestamps: true }
 );

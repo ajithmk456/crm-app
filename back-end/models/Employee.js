@@ -15,6 +15,7 @@ const employeeSchema = new mongoose.Schema(
     address: { type: String, default: '' },
     role: { type: String, enum: ['Admin', 'Employee'], default: 'Employee' },
     status: { type: Boolean, default: true },
+    adminOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   },
   { timestamps: true }
 );

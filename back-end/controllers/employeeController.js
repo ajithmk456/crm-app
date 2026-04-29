@@ -5,6 +5,40 @@ const getAuthRoleFromEmployeeRole = (employeeRole) => {
   return String(employeeRole || '').toLowerCase() === 'admin' ? 'admin' : 'user';
 };
 
+const isAdminUser = (user) => String(user?.role || '').toLowerCase() === 'admin';
+
+const isLegacyPrimaryAdmin = async (user) => {
+  if (!isAdminUser(user)) {
+    return false;
+  }
+
+  const firstAdmin = await User.findOne({ role: 'admin' }).sort({ createdAt: 1 }).select('_id');
+  return Boolean(firstAdmin?._id && String(firstAdmin._id) === String(user._id));
+};
+
+const getAdminCreateScope = (req) => {
+  return isAdminUser(req.user) ? { adminOwner: req.user._id } : {};
+};
+
+const getAdminReadScope = async (req) => {
+  if (!isAdminUser(req.user)) {
+    return {};
+  }
+
+  const canSeeLegacyUnowned = await isLegacyPrimaryAdmin(req.user);
+  if (canSeeLegacyUnowned) {
+    return {
+      $or: [
+        { adminOwner: req.user._id },
+        { adminOwner: { $exists: false } },
+        { adminOwner: null },
+      ],
+    };
+  }
+
+  return { adminOwner: req.user._id };
+};
+
 exports.addEmployee = async (req, res, next) => {
   try {
     const { fullName, email, phone, address, role, status } = req.body;
@@ -31,6 +65,7 @@ exports.addEmployee = async (req, res, next) => {
       address,
       role: normalizedEmployeeRole,
       status: typeof status === 'boolean' ? status : true,
+      ...getAdminCreateScope(req),
     });
 
     try {
@@ -55,7 +90,7 @@ exports.addEmployee = async (req, res, next) => {
 exports.getEmployees = async (req, res, next) => {
   try {
     const { search, status } = req.query;
-    const query = {};
+    const query = { ...(await getAdminReadScope(req)) };
 
     if (search) {
       const regex = new RegExp(search, 'i');
@@ -75,7 +110,7 @@ exports.getEmployees = async (req, res, next) => {
 
 exports.getEmployeeById = async (req, res, next) => {
   try {
-    const employee = await Employee.findById(req.params.id);
+    const employee = await Employee.findOne({ _id: req.params.id, ...(await getAdminReadScope(req)) });
     if (!employee) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
@@ -87,7 +122,7 @@ exports.getEmployeeById = async (req, res, next) => {
 
 exports.updateEmployee = async (req, res, next) => {
   try {
-    const employee = await Employee.findById(req.params.id);
+    const employee = await Employee.findOne({ _id: req.params.id, ...(await getAdminReadScope(req)) });
     if (!employee) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
@@ -145,7 +180,7 @@ exports.updateEmployee = async (req, res, next) => {
 
 exports.deleteEmployee = async (req, res, next) => {
   try {
-    const employee = await Employee.findByIdAndDelete(req.params.id);
+    const employee = await Employee.findOneAndDelete({ _id: req.params.id, ...(await getAdminReadScope(req)) });
     if (!employee) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }

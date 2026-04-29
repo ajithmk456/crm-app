@@ -1,8 +1,60 @@
 const Task = require('../models/Task');
 const Employee = require('../models/Employee');
 const Enquiry = require('../models/Enquiry');
+const User = require('../models/User');
 const { scheduleTaskReminder, rescheduleTaskReminder, sendManualReminder } = require('../services/reminderService');
 const ReminderLog = require('../models/ReminderLog');
+
+const isAdminUser = (user) => String(user?.role || '').toLowerCase() === 'admin';
+
+const isLegacyPrimaryAdmin = async (user) => {
+  if (!isAdminUser(user)) {
+    return false;
+  }
+
+  const firstAdmin = await User.findOne({ role: 'admin' }).sort({ createdAt: 1 }).select('_id');
+  return Boolean(firstAdmin?._id && String(firstAdmin._id) === String(user._id));
+};
+
+const buildAdminTaskScope = async (user) => {
+  if (!isAdminUser(user)) {
+    return {};
+  }
+
+  const canSeeLegacyUnowned = await isLegacyPrimaryAdmin(user);
+  if (canSeeLegacyUnowned) {
+    return {
+      $or: [
+        { adminOwner: user._id },
+        { adminOwner: { $exists: false } },
+        { adminOwner: null },
+      ],
+    };
+  }
+
+  return { adminOwner: user._id };
+};
+
+const ensureAdminOwnsEmployee = async (user, employeeId) => {
+  if (!user?._id || !employeeId) {
+    return false;
+  }
+
+  const canSeeLegacyUnowned = await isLegacyPrimaryAdmin(user);
+  const employeeQuery = canSeeLegacyUnowned
+    ? {
+        _id: employeeId,
+        $or: [
+          { adminOwner: user._id },
+          { adminOwner: { $exists: false } },
+          { adminOwner: null },
+        ],
+      }
+    : { _id: employeeId, adminOwner: user._id };
+
+  const employee = await Employee.findOne(employeeQuery).select('_id');
+  return Boolean(employee?._id);
+};
 
 const resolveAssignedIdsForUser = async (user) => {
   const ids = [String(user._id)];
@@ -42,6 +94,14 @@ exports.createTask = async (req, res, next) => {
     if (!title || !assignedTo) {
       return res.status(400).json({ success: false, message: 'Title and assignedTo are required.' });
     }
+
+    if (isAdminUser(req.user)) {
+      const ownsEmployee = await ensureAdminOwnsEmployee(req.user, assignedTo);
+      if (!ownsEmployee) {
+        return res.status(403).json({ success: false, message: 'Cannot assign task to another admin\'s employee.' });
+      }
+    }
+
     const task = await Task.create({
       title,
       description,
@@ -55,6 +115,7 @@ exports.createTask = async (req, res, next) => {
       dueDate,
       reminderEnabled: reminderEnabled ?? false,
       reminderBefore: reminderBefore || 15,
+      ...(isAdminUser(req.user) ? { adminOwner: req.user._id } : {}),
     });
 
     const populated = await Task.findById(task._id).populate('assignedTo', 'fullName email phone');
@@ -72,9 +133,9 @@ exports.createTask = async (req, res, next) => {
 exports.getTasks = async (req, res, next) => {
   try {
     const { search, status, priority, assignedTo, fromDate, toDate } = req.query;
-    const query = {};
+    const query = { ...(await buildAdminTaskScope(req.user)) };
 
-    if ((req.user.role || '').toLowerCase() !== 'admin') {
+    if (!isAdminUser(req.user)) {
       const assignedIds = await resolveAssignedIdsForUser(req.user);
       query.assignedTo = { $in: assignedIds };
     } else if (assignedTo) {
@@ -114,9 +175,10 @@ exports.getUpcomingReminders = async (req, res, next) => {
       reminderEnabled: true,
       reminderTime: { $ne: null },
       status: { $ne: 'Completed' },
+      ...(await buildAdminTaskScope(req.user)),
     };
 
-    const isAdmin = (req.user.role || '').toLowerCase() === 'admin';
+    const isAdmin = isAdminUser(req.user);
     if (!isAdmin) {
       const assignedIds = await resolveAssignedIdsForUser(req.user);
       query.assignedTo = { $in: assignedIds };
@@ -183,11 +245,13 @@ exports.getUpcomingReminders = async (req, res, next) => {
 
 exports.getTaskById = async (req, res, next) => {
   try {
-    const task = await Task.findById(req.params.id).populate('assignedTo', 'fullName email phone');
+    const task = await Task.findOne({ _id: req.params.id, ...(await buildAdminTaskScope(req.user)) })
+      .populate('assignedTo', 'fullName email phone');
     if (!task) {
       return res.status(404).json({ success: false, message: 'Task not found' });
     }
-    if ((req.user.role || '').toLowerCase() !== 'admin') {
+
+    if (!isAdminUser(req.user)) {
       const assignedIds = await resolveAssignedIdsForUser(req.user);
       const taskAssignedId = task.assignedTo?._id ? String(task.assignedTo._id) : String(task.assignedTo || '');
       if (!assignedIds.includes(taskAssignedId)) {
@@ -202,11 +266,11 @@ exports.getTaskById = async (req, res, next) => {
 
 exports.updateTask = async (req, res, next) => {
   try {
-    const task = await Task.findById(req.params.id);
+    const task = await Task.findOne({ _id: req.params.id, ...(await buildAdminTaskScope(req.user)) });
     if (!task) {
       return res.status(404).json({ success: false, message: 'Task not found' });
     }
-    const isAdmin = (req.user.role || '').toLowerCase() === 'admin';
+    const isAdmin = isAdminUser(req.user);
 
     if (!isAdmin) {
       const assignedIds = await resolveAssignedIdsForUser(req.user);
@@ -230,6 +294,13 @@ exports.updateTask = async (req, res, next) => {
       reminderEnabled,
       reminderBefore,
     } = req.body;
+
+    if (isAdmin && assignedTo !== undefined) {
+      const ownsEmployee = await ensureAdminOwnsEmployee(req.user, assignedTo);
+      if (!ownsEmployee) {
+        return res.status(403).json({ success: false, message: 'Cannot assign task to another admin\'s employee.' });
+      }
+    }
 
     // Employees can only change their own task status.
     if (!isAdmin) {
@@ -289,7 +360,7 @@ exports.updateTask = async (req, res, next) => {
 
 exports.deleteTask = async (req, res, next) => {
   try {
-    const task = await Task.findByIdAndDelete(req.params.id);
+    const task = await Task.findOneAndDelete({ _id: req.params.id, ...(await buildAdminTaskScope(req.user)) });
     if (!task) {
       return res.status(404).json({ success: false, message: 'Task not found' });
     }
@@ -302,6 +373,11 @@ exports.deleteTask = async (req, res, next) => {
 exports.sendTaskReminder = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const task = await Task.findOne({ _id: id, ...(await buildAdminTaskScope(req.user)) }).select('_id');
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
     const reminderLog = await sendManualReminder(id);
     res.status(200).json({ success: true, data: reminderLog });
   } catch (error) {
@@ -312,6 +388,11 @@ exports.sendTaskReminder = async (req, res, next) => {
 exports.getTaskReminderLogs = async (req, res, next) => {
   try {
     const { taskId } = req.params;
+    const task = await Task.findOne({ _id: taskId, ...(await buildAdminTaskScope(req.user)) }).select('_id');
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
     const logs = await ReminderLog.find({ taskId })
       .populate('assignedTo', 'fullName email phone')
       .sort({ createdAt: -1 });
