@@ -133,71 +133,143 @@
   </div>
 </div>
 
-<div class="task-detail-overlay" *ngIf="isTaskDetailOpen && selectedTask" (click)="closeTaskDetails()">
-  <div class="task-detail-modal" (click)="$event.stopPropagation()">
-    <div class="task-detail-head">
-      <div>
-        <h3>{{ selectedTask.title }}</h3>
-        <p>{{ selectedTask.description || 'No description provided.' }}</p>
+<div class="task-drawer-overlay" *ngIf="isTaskDetailOpen && selectedTask" (click)="closeTaskDetails()"></div>
+<aside class="task-drawer" *ngIf="isTaskDetailOpen && selectedTask" (click)="$event.stopPropagation()">
+  <div class="task-drawer-header">
+    <div>
+      <h3>{{ selectedTask.title }}</h3>
+    </div>
+    <button type="button" class="close-btn" (click)="closeTaskDetails()" aria-label="Close task details drawer">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+
+  <div class="task-drawer-body">
+    <section class="drawer-section">
+      <div class="task-detail-grid">
+        <div class="detail-item">
+          <span class="label">Customer Name</span>
+          <span class="value">{{ selectedTask.customerName || '-' }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Customer Phone</span>
+          <span class="value">{{ selectedTask.customerPhone || '-' }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Priority</span>
+          <span class="value">
+            <span class="priority-badge" [ngClass]="selectedTask.priority.toLowerCase()">{{ selectedTask.priority }}</span>
+          </span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Due Date</span>
+          <span class="value">{{ formatDate(selectedTask.dueDate) }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Status</span>
+          <span class="value">
+            <span class="status-badge" [ngClass]="statusClass(selectedTask.status)">{{ selectedTask.status }}</span>
+          </span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Report Sent</span>
+          <span class="value">{{ selectedTask.reportSent || selectedTask.status === 'Report Sent' ? 'Yes' : 'No' }}</span>
+        </div>
       </div>
-      <button type="button" class="close-btn" (click)="closeTaskDetails()">
-        <i class="fa-solid fa-xmark"></i>
+    </section>
+
+    <section class="drawer-section" *ngIf="selectedTask.description">
+      <div class="section-head">
+        <h4>Description</h4>
+      </div>
+      <p class="task-description" [class.expanded]="showFullDescription">
+        {{ selectedTask.description || 'No description provided.' }}
+      </p>
+      <button type="button" class="text-btn" *ngIf="shouldShowDescriptionToggle(selectedTask.description)" (click)="toggleDescription()">
+        {{ showFullDescription ? 'Read Less' : 'Read More' }}
       </button>
-    </div>
+    </section>
 
-    <div class="task-detail-grid">
-      <div class="detail-item">
-        <span class="label">Customer Name</span>
-        <span class="value">{{ selectedTask.customerName || '-' }}</span>
+    <section class="drawer-section task-proof-section">
+      <div class="section-head">
+        <h4>
+          <i class="fa-solid fa-paperclip"></i>
+          Attachments
+        </h4>
       </div>
-      <div class="detail-item">
-        <span class="label">Customer Phone</span>
-        <span class="value">{{ selectedTask.customerPhone || '-' }}</span>
-      </div>
-      <div class="detail-item">
-        <span class="label">Priority</span>
-        <span class="value">
-          <span class="priority-badge" [ngClass]="selectedTask.priority.toLowerCase()">{{ selectedTask.priority }}</span>
-        </span>
-      </div>
-      <div class="detail-item">
-        <span class="label">Due Date</span>
-        <span class="value">{{ formatDate(selectedTask.dueDate) }}</span>
-      </div>
-      <div class="detail-item">
-        <span class="label">Status</span>
-        <span class="value">
-          <span class="status-badge" [ngClass]="statusClass(selectedTask.status)">{{ selectedTask.status }}</span>
-        </span>
-      </div>
-      <div class="detail-item">
-        <span class="label">Report Sent</span>
-        <span class="value">{{ selectedTask.reportSent || selectedTask.status === 'Report Sent' ? 'Yes' : 'No' }}</span>
-      </div>
-    </div>
 
-    <div class="task-proof-section">
-      <h4>Proof Attachments</h4>
+      <div class="proof-upload-block">
+        <label class="upload-btn" for="employee-task-proof-upload">
+          <i class="fa-solid fa-upload"></i>
+          Choose File
+        </label>
+        <input id="employee-task-proof-upload" type="file" [attr.accept]="attachmentAccept" (change)="onProofFileSelected($event)">
+        <span class="selected-file-name">{{ getSelectedProofName() }}</span>
+      </div>
+
       <div class="proof-upload-row">
-        <input type="file" accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx" (change)="onProofFileSelected($event)">
         <input type="text" placeholder="Optional note" [(ngModel)]="proofNote">
         <button type="button" class="btn-inline report-sent" [disabled]="!proofFile || isUploadingProof" (click)="uploadProof(selectedTask)">
           <i class="fa-solid fa-paperclip"></i>
-          {{ isUploadingProof ? 'Uploading...' : 'Upload Proof' }}
+          {{ isUploadingProof ? 'Uploading...' : 'Upload' }}
         </button>
       </div>
 
-      <div class="proof-list" *ngIf="selectedTask.attachments?.length; else noProofTpl">
-        <a class="proof-item" *ngFor="let item of selectedTask.attachments" [href]="item.url" target="_blank" rel="noopener">
-          <i class="fa-regular fa-file-lines"></i>
-          <span>{{ item.fileName }}</span>
-        </a>
-      </div>
-      <ng-template #noProofTpl>
-        <p class="proof-empty">No proof files attached yet.</p>
-      </ng-template>
-    </div>
+      <div class="attachment-list" *ngIf="selectedTask.attachments?.length; else noAttachmentsTpl">
+        <div class="attachment-item" *ngFor="let item of selectedTask.attachments">
+          <div class="attachment-main">
+            <div class="attachment-icon">
+              <i [class]="getAttachmentIconClass(item)"></i>
+            </div>
+            <div class="attachment-meta">
+              <span class="attachment-name">{{ item.fileName }}</span>
+              <span class="attachment-note" *ngIf="item.note">{{ item.note }}</span>
+            </div>
+          </div>
 
+          <div class="attachment-actions">
+            <button type="button" class="attachment-action" (click)="openAttachment(item)">
+              <i class="fa-regular fa-eye"></i>
+              View
+            </button>
+            <button type="button" class="attachment-action" (click)="downloadAttachment(item)">
+              <i class="fa-solid fa-download"></i>
+              Download
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="attachment-preview" *ngIf="previewAttachment as activePreview">
+        <div class="attachment-preview-head">
+          <span>Preview</span>
+          <strong>{{ activePreview.fileName }}</strong>
+        </div>
+
+        <div class="attachment-preview-body loading" *ngIf="isPreviewLoading">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span>Loading preview...</span>
+        </div>
+
+        <div class="attachment-preview-body" *ngIf="!isPreviewLoading && previewObjectUrl && canPreviewAttachment(activePreview); else previewUnavailableTpl">
+          <img *ngIf="isImageAttachment(activePreview)" [src]="previewObjectUrl" [alt]="activePreview.fileName">
+          <iframe *ngIf="!isImageAttachment(activePreview)" [src]="previewSafeResourceUrl" title="Attachment preview"></iframe>
+        </div>
+      </div>
+
+      <ng-template #noAttachmentsTpl>
+        <p class="proof-empty">No attachments yet</p>
+      </ng-template>
+
+      <ng-template #previewUnavailableTpl>
+        <div class="attachment-preview attachment-preview-empty" *ngIf="!isPreviewLoading">
+          <p>{{ previewError || 'Preview is not available for this file type. Use Download to save it directly.' }}</p>
+        </div>
+      </ng-template>
+    </section>
+  </div>
+
+  <div class="task-drawer-footer">
     <div class="task-detail-actions">
       <button
         class="btn-inline start"
@@ -214,7 +286,7 @@
         (click)="markReportSent(selectedTask)"
         [disabled]="isTaskBusy(selectedTask)">
         <i class="fa-regular fa-paper-plane"></i>
-        Mark Report Sent
+        Send Report
       </button>
 
       <button
@@ -232,4 +304,4 @@
       </span>
     </div>
   </div>
-</div>
+</aside>

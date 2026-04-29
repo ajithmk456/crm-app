@@ -10,9 +10,12 @@ if (!fs.existsSync(uploadsDir)) {
 
 const allowedMimeTypes = new Set([
   'application/pdf',
+  'application/msword',
   'image/jpeg',
   'image/jpg',
   'image/png',
+  'text/plain',
+  'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ]);
@@ -37,7 +40,7 @@ const upload = multer({
   },
   fileFilter: (_req, file, cb) => {
     if (!allowedMimeTypes.has(String(file.mimetype || '').toLowerCase())) {
-      return cb(new Error('Unsupported file type. Allowed: pdf, jpg, png, docx, xlsx.'));
+      return cb(new Error('Unsupported file type. Allowed: pdf, doc, docx, xls, xlsx, jpg, png, txt.'));
     }
 
     return cb(null, true);

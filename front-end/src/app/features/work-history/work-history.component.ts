@@ -280,6 +280,70 @@ export class WorkHistoryComponent implements OnInit {
     }
   }
 
+  getEventTitle(item: WorkHistoryItem): string {
+    const time = this.formatShortTime(item.createdAt);
+    const typeLabel = this.getTypeLabel(item);
+
+    if (typeLabel === 'Report Send') {
+      return `Report submitted at ${time}`;
+    }
+
+    if (typeLabel === 'Task Picked') {
+      return `Task picked at ${time}`;
+    }
+
+    if (typeLabel === 'Task Assigned') {
+      return `Task assigned at ${time}`;
+    }
+
+    if (typeLabel === 'Task Created') {
+      return `Task created at ${time}`;
+    }
+
+    if (typeLabel === 'Payment Received') {
+      return `Payment received at ${time}`;
+    }
+
+    return `Activity updated at ${time}`;
+  }
+
+  getEventIconByLabel(label: string): string {
+    switch (label) {
+      case 'Report Send':
+        return 'fa-circle-check';
+      case 'Task Created':
+        return 'fa-circle-plus';
+      case 'Task Assigned':
+        return 'fa-user-plus';
+      case 'Task Picked':
+        return 'fa-circle-play';
+      case 'Payment Received':
+        return 'fa-money-bill-wave';
+      default:
+        return 'fa-circle-info';
+    }
+  }
+
+  getEventToneClassByLabel(label: string): string {
+    switch (label) {
+      case 'Report Send':
+        return 'tone-report';
+      case 'Task Created':
+      case 'Task Picked':
+        return 'tone-task';
+      case 'Task Assigned':
+        return 'tone-assignment';
+      case 'Payment Received':
+        return 'tone-message';
+      default:
+        return 'tone-message';
+    }
+  }
+
+  getEventToneClass(item: WorkHistoryItem): string {
+    return this.getEventToneClassByLabel(this.getTypeLabel(item));
+  }
+
   getTaskTitle(taskId: string, fallbackItem?: WorkHistoryItem): string {
     const task = this.tasks.find((entry) => entry._id === taskId);
     if (task?.title) {
@@ -400,6 +464,19 @@ export class WorkHistoryComponent implements OnInit {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date);
+  }
+
+  formatShortTime(dateValue: string): string {
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) {
+      return '--:--';
+    }
+
+    return new Intl.DateTimeFormat('en-GB', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,

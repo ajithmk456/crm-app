@@ -7,6 +7,7 @@ import { TaskService, Task } from '../task.service';
 import { EmployeeService, Employee } from '../../manage-employee/employee.service';
 import { AuthService } from '../../auth/auth.service';
 import { DateTimePickerComponent } from '../../../shared/components/date-time-picker/date-time-picker.component';
+import { catchError, forkJoin, map, Observable, of, switchMap, throwError } from 'rxjs';
 
 @Component({
   selector: 'app-manage-task',
@@ -31,6 +32,21 @@ export class ManageTaskComponent {
   loadingSave = false;
   message = '';
   messageType: 'success' | 'error' = 'success';
+  selectedFiles: File[] = [];
+
+  readonly maxFileSizeBytes = 15 * 1024 * 1024;
+  readonly acceptedFileExtensions = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.txt';
+  readonly allowedFileTypes = new Set([
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'text/plain'
+  ]);
 
   readonly reminderOptions = [
     { label: '10 Minutes Before', value: 10 },
@@ -255,6 +271,7 @@ export class ManageTaskComponent {
       reminderEnabled: false,
       reminderBefore: 10
     });
+    this.selectedFiles = [];
     this.isTaskModalOpen = true;
   }
 
@@ -275,11 +292,106 @@ export class ManageTaskComponent {
       reminderEnabled: !!task.reminderEnabled,
       reminderBefore: Number(task.reminderBefore) || 10
     });
+    this.selectedFiles = [];
     this.isTaskModalOpen = true;
   }
 
   closeTaskModal() {
     this.isTaskModalOpen = false;
+    this.selectedFiles = [];
+  }
+
+  onFileDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const droppedFiles = event.dataTransfer?.files;
+    if (!droppedFiles?.length) {
+      return;
+    }
+
+    this.handleSelectedFiles(Array.from(droppedFiles));
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = input.files;
+    if (!files?.length) {
+      return;
+    }
+
+    this.handleSelectedFiles(Array.from(files));
+    input.value = '';
+  }
+
+  removeFile(index: number): void {
+    this.selectedFiles = this.selectedFiles.filter((_, idx) => idx !== index);
+  }
+
+  getFileSize(bytes: number): string {
+    if (!bytes) {
+      return '0 B';
+    }
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  private handleSelectedFiles(files: File[]): void {
+    for (const file of files) {
+      if (!this.allowedFileTypes.has(String(file.type || '').toLowerCase())) {
+        this.showMessage(`Unsupported file type for ${file.name}`, 'error');
+        continue;
+      }
+
+      if (file.size > this.maxFileSizeBytes) {
+        this.showMessage(`File exceeds 15MB limit: ${file.name}`, 'error');
+        continue;
+      }
+
+      const alreadyAdded = this.selectedFiles.some(
+        (item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified
+      );
+
+      if (!alreadyAdded) {
+        this.selectedFiles.push(file);
+      }
+    }
+  }
+
+  private uploadAndAttachFiles(taskId: string): Observable<void> {
+    if (!this.selectedFiles.length) {
+      return of(void 0);
+    }
+
+    const requests = this.selectedFiles.map((file) =>
+      this.taskService.uploadTaskFile(file).pipe(
+        switchMap((uploadResponse) => {
+          const uploaded = uploadResponse.data;
+          if (!uploadResponse.success || !uploaded?.url || !uploaded.filename) {
+            return throwError(() => new Error(uploadResponse.message || `Failed to upload ${file.name}`));
+          }
+
+          return this.taskService.addTaskAttachment(taskId, {
+            url: uploaded.url,
+            fileName: uploaded.filename,
+            mimeType: uploaded.mimeType,
+          });
+        }),
+        map((attachResponse) => {
+          if (!attachResponse.success) {
+            throw new Error(attachResponse.message || `Failed to attach ${file.name}`);
+          }
+          return true;
+        })
+      )
+    );
+
+    return forkJoin(requests).pipe(map(() => void 0));
   }
 
   saveTask() {
@@ -317,12 +429,43 @@ export class ManageTaskComponent {
       reminderBefore: formValue.reminderBefore
     };
 
-    if (this.isEditMode && this.editingTaskId) {
-      this.taskService.updateTask(this.editingTaskId, payload).subscribe({
-        next: (res) => {
+    const saveRequest$ = this.isEditMode && this.editingTaskId
+      ? this.taskService.updateTask(this.editingTaskId, payload)
+      : this.taskService.createTask(payload);
+
+    saveRequest$
+      .pipe(
+        switchMap((saveResponse) => {
+          if (!saveResponse.success) {
+            return throwError(() => new Error(saveResponse.message || 'Failed to save task'));
+          }
+
+          const taskData = saveResponse.data && !Array.isArray(saveResponse.data)
+            ? (saveResponse.data as Task)
+            : null;
+          const taskId = this.isEditMode ? this.editingTaskId : (taskData?._id || null);
+
+          if (!taskId || !this.selectedFiles.length) {
+            return of({ saveResponse, attachmentError: '' });
+          }
+
+          return this.uploadAndAttachFiles(taskId).pipe(
+            map(() => ({ saveResponse, attachmentError: '' })),
+            catchError((error) => of({
+              saveResponse,
+              attachmentError: error instanceof Error ? error.message : 'Task saved, but file upload failed.',
+            }))
+          );
+        })
+      )
+      .subscribe({
+        next: ({ saveResponse, attachmentError }) => {
           this.loadingSave = false;
-          if (res.success) {
-            const updatedTask = res.data && !Array.isArray(res.data) ? (res.data as Task) : null;
+
+          if (this.isEditMode && this.editingTaskId) {
+            const updatedTask = saveResponse.data && !Array.isArray(saveResponse.data)
+              ? (saveResponse.data as Task)
+              : null;
             this.tasks = this.tasks.map((item) => {
               if (item._id !== this.editingTaskId) {
                 return item;
@@ -335,35 +478,21 @@ export class ManageTaskComponent {
               };
             });
             this.applyFilters();
-            this.showMessage('Task updated successfully', 'success');
-            this.closeTaskModal();
           } else {
-            this.showMessage(res.message || 'Failed to update task', 'error');
-          }
-        },
-        error: () => {
-          this.loadingSave = false;
-          this.showMessage('Failed to update task', 'error');
-        }
-      });
-    } else {
-      this.taskService.createTask(payload).subscribe({
-        next: (res) => {
-          this.loadingSave = false;
-          if (res.success) {
-            this.showMessage('Task created successfully', 'success');
-            this.closeTaskModal();
             this.loadTasks();
-          } else {
-            this.showMessage(res.message || 'Failed to create task', 'error');
           }
+
+          this.showMessage(
+            attachmentError || (this.isEditMode ? 'Task updated successfully' : 'Task created successfully'),
+            attachmentError ? 'error' : 'success'
+          );
+          this.closeTaskModal();
         },
         error: () => {
           this.loadingSave = false;
-          this.showMessage('Failed to create task', 'error');
+          this.showMessage(this.isEditMode ? 'Failed to update task' : 'Failed to create task', 'error');
         }
       });
-    }
   }
 
   openDeleteModal(task: Task) {

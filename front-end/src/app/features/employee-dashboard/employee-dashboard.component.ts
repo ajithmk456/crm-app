@@ -1,9 +1,10 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
-import { Task, TaskService } from '../manage-task/task.service';
+import { Task, TaskAttachment, TaskService } from '../manage-task/task.service';
 import { ToastrService } from 'ngx-toastr';
 
 type DashboardFilter = 'all' | 'open' | 'in-progress' | 'report-sent' | 'completed' | 'overdue' | 'high-priority';
@@ -27,6 +28,14 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
   isUploadingProof = false;
   proofNote = '';
   proofFile: File | null = null;
+  showFullDescription = false;
+  previewAttachment: TaskAttachment | null = null;
+  previewObjectUrl: string | null = null;
+  previewSafeResourceUrl: SafeResourceUrl | null = null;
+  previewMimeType = '';
+  isPreviewLoading = false;
+  previewError = '';
+  readonly attachmentAccept = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.txt';
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -34,6 +43,7 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
     private authService: AuthService,
     private router: Router,
     private toastr: ToastrService,
+    private sanitizer: DomSanitizer,
   ) {}
 
   ngOnInit(): void {
@@ -45,9 +55,18 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.resetPreviewState();
+    this.syncBodyScrollLock(false);
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.isTaskDetailOpen) {
+      this.closeTaskDetails();
     }
   }
 
@@ -109,6 +128,9 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
     this.isTaskDetailOpen = true;
     this.proofFile = null;
     this.proofNote = '';
+    this.showFullDescription = false;
+    this.previewAttachment = null;
+    this.syncBodyScrollLock(true);
   }
 
   closeTaskDetails(): void {
@@ -116,11 +138,138 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
     this.selectedTask = null;
     this.proofFile = null;
     this.proofNote = '';
+    this.showFullDescription = false;
+    this.previewAttachment = null;
+    this.resetPreviewState();
+    this.syncBodyScrollLock(false);
   }
 
   onProofFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.proofFile = input.files?.[0] || null;
+  }
+
+  toggleDescription(): void {
+    this.showFullDescription = !this.showFullDescription;
+  }
+
+  shouldShowDescriptionToggle(description?: string): boolean {
+    return (description || '').trim().length > 140;
+  }
+
+  getAttachmentIconClass(item: TaskAttachment): string {
+    const mimeType = String(item.mimeType || '').toLowerCase();
+    const fileName = String(item.fileName || '').toLowerCase();
+
+    if (mimeType.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/.test(fileName)) {
+      return 'fa-regular fa-file-image';
+    }
+
+    if (mimeType.includes('pdf') || fileName.endsWith('.pdf')) {
+      return 'fa-regular fa-file-pdf';
+    }
+
+    if (mimeType.includes('word') || /\.(doc|docx)$/.test(fileName)) {
+      return 'fa-regular fa-file-word';
+    }
+
+    if (mimeType.includes('excel') || mimeType.includes('sheet') || /\.(xls|xlsx)$/.test(fileName)) {
+      return 'fa-regular fa-file-excel';
+    }
+
+    if (mimeType.includes('text') || fileName.endsWith('.txt')) {
+      return 'fa-regular fa-file-lines';
+    }
+
+    return 'fa-regular fa-file';
+  }
+
+  canPreviewAttachment(item: TaskAttachment | null): boolean {
+    if (!item?.url) {
+      return false;
+    }
+
+    const mimeType = String(this.previewMimeType || item.mimeType || '').toLowerCase();
+    const fileName = String(item.fileName || '').toLowerCase();
+
+    return mimeType.startsWith('image/')
+      || mimeType.includes('pdf')
+      || mimeType.includes('text')
+      || /\.(jpg|jpeg|png|gif|webp|pdf|txt)$/.test(fileName);
+  }
+
+  isImageAttachment(item: TaskAttachment | null): boolean {
+    if (!item) {
+      return false;
+    }
+
+    const mimeType = String(this.previewMimeType || item.mimeType || '').toLowerCase();
+    const fileName = String(item.fileName || '').toLowerCase();
+    return mimeType.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/.test(fileName);
+  }
+
+  async openAttachment(item: TaskAttachment): Promise<void> {
+    if (!item?.url) {
+      return;
+    }
+
+    this.previewAttachment = item;
+    this.previewError = '';
+    this.isPreviewLoading = true;
+    this.revokePreviewObjectUrl();
+
+    try {
+      const response = await fetch(item.url, { mode: 'cors' });
+      if (!response.ok) {
+        throw new Error('Failed to load attachment preview.');
+      }
+
+      const contentType = String(response.headers.get('content-type') || item.mimeType || '');
+      const blob = await response.blob();
+      this.previewMimeType = contentType || blob.type || '';
+      this.previewObjectUrl = URL.createObjectURL(blob);
+      this.previewSafeResourceUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.previewObjectUrl);
+
+      if (!this.canPreviewAttachment(item)) {
+        this.previewError = 'Preview is not available for this file type. Use Download to save it.';
+      }
+    } catch {
+      this.previewError = 'Unable to load preview. You can still download the file.';
+      this.previewObjectUrl = null;
+      this.previewSafeResourceUrl = null;
+      this.previewMimeType = '';
+    } finally {
+      this.isPreviewLoading = false;
+    }
+  }
+
+  async downloadAttachment(item: TaskAttachment): Promise<void> {
+    if (!item.url) {
+      return;
+    }
+
+    try {
+      const response = await fetch(item.url, { mode: 'cors' });
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = item.fileName || 'attachment';
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      this.toastr.error('Failed to download attachment.', 'Error');
+    }
+  }
+
+  getSelectedProofName(): string {
+    return this.proofFile?.name || 'No file chosen';
   }
 
   uploadProof(task: Task): void {
@@ -231,6 +380,7 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
           this.selectedTask = refreshedTask;
           if (!refreshedTask) {
             this.isTaskDetailOpen = false;
+            this.syncBodyScrollLock(false);
           }
         }
 
@@ -314,5 +464,26 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
     const assignedEmail = (task.assignedTo?.email || '').toLowerCase();
 
     return assignedId === this.currentUser.id || (!!assignedEmail && assignedEmail === this.currentUser.email);
+  }
+
+  private resetPreviewState(): void {
+    this.isPreviewLoading = false;
+    this.previewError = '';
+    this.previewMimeType = '';
+    this.previewSafeResourceUrl = null;
+    this.revokePreviewObjectUrl();
+  }
+
+  private revokePreviewObjectUrl(): void {
+    if (!this.previewObjectUrl) {
+      return;
+    }
+
+    URL.revokeObjectURL(this.previewObjectUrl);
+    this.previewObjectUrl = null;
+  }
+
+  private syncBodyScrollLock(locked: boolean): void {
+    document.body.style.overflow = locked ? 'hidden' : '';
   }
 }

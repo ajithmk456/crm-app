@@ -133,6 +133,31 @@
         <textarea rows="3" placeholder="Enter description" formControlName="description"></textarea>
       </div>
 
+      <div class="form-group">
+        <label>Attach Files</label>
+        <div class="file-upload-area" (click)="fileInput.click()" (drop)="onFileDrop($event)" (dragover)="$event.preventDefault()" (dragenter)="$event.preventDefault()">
+          <i class="fas fa-cloud-upload-alt"></i>
+          <p>Click or drag files here</p>
+          <small>Max 15MB per file</small>
+          <input #fileInput type="file" multiple hidden (change)="onFileSelected($event)" [attr.accept]="acceptedFileExtensions" />
+        </div>
+
+        <div class="files-list" *ngIf="selectedFiles.length > 0">
+          <div class="file-item" *ngFor="let file of selectedFiles; let i = index">
+            <div class="file-info">
+              <i class="fas fa-file"></i>
+              <div class="file-details">
+                <span class="file-name">{{ file.name }}</span>
+                <span class="file-size">{{ getFileSize(file.size) }}</span>
+              </div>
+            </div>
+            <button type="button" class="file-remove-btn" (click)="removeFile(i)" title="Remove file">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="form-group" *ngIf="isAdmin">
         <label>Assign To</label>
         <select formControlName="assignedTo">
@@ -151,22 +176,6 @@
       <div class="form-group">
         <label>Customer Phone</label>
         <input type="text" placeholder="Enter customer phone" formControlName="customerPhone" />
-      </div>
-
-      <div class="form-group switch-group">
-        <label>Payment Received</label>
-        <label class="switch">
-          <input type="checkbox" formControlName="paymentReceived" />
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <div class="form-group switch-group">
-        <label>Report Sent</label>
-        <label class="switch">
-          <input type="checkbox" formControlName="reportSent" />
-          <span class="slider"></span>
-        </label>
       </div>
 
       <div class="form-group">
@@ -198,12 +207,18 @@
         </div>
       </div>
 
-      <div class="form-group">
-        <label>Enable Reminder</label>
-
-        <label class="switch">
+      <div class="form-group checkboxes-group">
+        <label class="checkbox-wrapper">
+          <input type="checkbox" formControlName="paymentReceived" />
+          <span class="checkbox-label">Payment Received</span>
+        </label>
+        <label class="checkbox-wrapper">
+          <input type="checkbox" formControlName="reportSent" />
+          <span class="checkbox-label">Report Sent</span>
+        </label>
+        <label class="checkbox-wrapper">
           <input type="checkbox" formControlName="reminderEnabled" />
-          <span class="slider"></span>
+          <span class="checkbox-label">Enable Reminder</span>
         </label>
       </div>
 

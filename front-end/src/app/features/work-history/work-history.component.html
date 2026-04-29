@@ -62,7 +62,10 @@
           <span class="task-main-time">{{ formatExactTime(group.latestEvent.createdAt) }}</span>
         </div>
 
-        <p class="task-main-latest">Latest activity: {{ getDisplayTitle(group.latestEvent) }}</p>
+        <p class="task-main-latest">
+          <i class="fa-solid" [ngClass]="getEventIconByLabel(getTypeLabel(group.latestEvent))"></i>
+          <span>{{ getEventTitle(group.latestEvent) }}</span>
+        </p>
 
         <div class="task-main-meta">
           <span><i class="fa-regular fa-user"></i> {{ getEmployeeLabel(group.latestEvent) }}</span>
@@ -76,9 +79,9 @@
 
         <div class="task-detail-list" *ngIf="expandedTaskGroupId === group.taskId">
           <ng-container *ngFor="let eventGroup of getEventGroups(group.events)">
-            <article class="task-detail-card" *ngIf="eventGroup.count === 1">
+            <article class="task-detail-card" *ngIf="eventGroup.count === 1" [ngClass]="getEventToneClass(eventGroup.items[0])">
               <div class="task-detail-top">
-                <span class="type">{{ eventGroup.label }}</span>
+                <span class="type"><i class="fa-solid" [ngClass]="getEventIconByLabel(eventGroup.label)"></i> {{ getEventTitle(eventGroup.items[0]) }}</span>
                 <span class="time">{{ formatExactTime(eventGroup.items[0].createdAt) }}</span>
               </div>
 
@@ -89,15 +92,16 @@
               </div>
             </article>
 
-            <article class="task-detail-group" *ngIf="eventGroup.count > 1">
+            <article class="task-detail-group" *ngIf="eventGroup.count > 1" [ngClass]="getEventToneClassByLabel(eventGroup.label)">
               <div class="task-group-header">
-                <span class="task-group-title">{{ eventGroup.label }}</span>
+                <span class="task-group-title"><i class="fa-solid" [ngClass]="getEventIconByLabel(eventGroup.label)"></i> {{ eventGroup.label }}</span>
                 <span class="task-group-count">{{ eventGroup.count }}</span>
               </div>
 
               <div class="task-group-items">
                 <article class="task-detail-item" *ngFor="let event of eventGroup.items">
                   <div class="task-detail-top">
+                    <span class="type"><i class="fa-solid" [ngClass]="getEventIconByLabel(eventGroup.label)"></i> {{ getEventTitle(event) }}</span>
                     <span class="time">{{ formatExactTime(event.createdAt) }}</span>
                   </div>
 
@@ -121,7 +125,10 @@
           <span class="task-main-time">{{ formatExactTime(main.createdAt) }}</span>
         </div>
 
-        <p class="task-main-latest">Latest activity: {{ getDisplayTitle(main) }}</p>
+        <p class="task-main-latest">
+          <i class="fa-solid" [ngClass]="getEventIconByLabel(getTypeLabel(main))"></i>
+          <span>{{ getEventTitle(main) }}</span>
+        </p>
 
         <div class="task-main-meta">
           <span><i class="fa-regular fa-user"></i> {{ getEmployeeLabel(main) }}</span>
@@ -136,9 +143,9 @@
 
       <div class="task-detail-list" *ngIf="taskDetailsExpanded && selectedTaskEvents.length">
         <ng-container *ngFor="let eventGroup of getEventGroups(selectedTaskEvents)">
-          <article class="task-detail-card" *ngIf="eventGroup.count === 1">
+          <article class="task-detail-card" *ngIf="eventGroup.count === 1" [ngClass]="getEventToneClass(eventGroup.items[0])">
             <div class="task-detail-top">
-              <span class="type">{{ eventGroup.label }}</span>
+              <span class="type"><i class="fa-solid" [ngClass]="getEventIconByLabel(eventGroup.label)"></i> {{ getEventTitle(eventGroup.items[0]) }}</span>
               <span class="time">{{ formatExactTime(eventGroup.items[0].createdAt) }}</span>
             </div>
 
@@ -149,15 +156,16 @@
             </div>
           </article>
 
-          <article class="task-detail-group" *ngIf="eventGroup.count > 1">
+          <article class="task-detail-group" *ngIf="eventGroup.count > 1" [ngClass]="getEventToneClassByLabel(eventGroup.label)">
             <div class="task-group-header">
-              <span class="task-group-title">{{ eventGroup.label }}</span>
+              <span class="task-group-title"><i class="fa-solid" [ngClass]="getEventIconByLabel(eventGroup.label)"></i> {{ eventGroup.label }}</span>
               <span class="task-group-count">{{ eventGroup.count }}</span>
             </div>
 
             <div class="task-group-items">
               <article class="task-detail-item" *ngFor="let event of eventGroup.items">
                 <div class="task-detail-top">
+                  <span class="type"><i class="fa-solid" [ngClass]="getEventIconByLabel(eventGroup.label)"></i> {{ getEventTitle(event) }}</span>
                   <span class="time">{{ formatExactTime(event.createdAt) }}</span>
                 </div>
 
