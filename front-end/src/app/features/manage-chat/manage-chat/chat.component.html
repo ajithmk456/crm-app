@@ -68,7 +68,74 @@
         </div>
       </header>
 
-      <div class="message-stream" #messageScroller (scroll)="onMessageStreamScroll()">
+      <div class="attachment-compose-overlay" *ngIf="selectedAttachment as attachment">
+        <div class="compose-stage-header">
+          <button type="button" class="compose-close" (click)="removeSelectedAttachment()" aria-label="Close preview">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+          <div class="compose-title">Media preview</div>
+          <div class="compose-spacer"></div>
+        </div>
+
+        <div class="compose-stage-body">
+          <ng-container *ngIf="attachment.isImage && attachment.previewUrl; else fullNonImagePreviewTpl">
+            <img class="compose-stage-image" [src]="attachment.previewUrl" [alt]="attachment.name || 'Image preview'">
+          </ng-container>
+          <ng-template #fullNonImagePreviewTpl>
+            <div class="compose-stage-pdf" *ngIf="attachment.isPdf && attachment.previewResourceUrl; else fullGenericFilePreviewTpl">
+              <iframe [src]="attachment.previewResourceUrl" title="PDF preview"></iframe>
+            </div>
+            <ng-template #fullGenericFilePreviewTpl>
+              <div class="compose-stage-file-card">
+                <i class="fa-solid" [ngClass]="getSelectedAttachmentIconClass()"></i>
+                <span>{{ attachment.name }}</span>
+              </div>
+            </ng-template>
+          </ng-template>
+        </div>
+
+        <div class="compose-stage-footer">
+          <div class="preview-strip">
+            <button
+              type="button"
+              class="preview-strip-item"
+              *ngFor="let item of attachmentQueue; let idx = index"
+              [class.active]="isActiveAttachmentDraft(idx)"
+              (click)="selectAttachmentDraft(idx)"
+              [attr.aria-label]="'Select attachment ' + (idx + 1)"
+            >
+              <ng-container *ngIf="item.isImage && item.previewUrl; else composePreviewStripFileTpl">
+                <img [src]="item.previewUrl" [alt]="getAttachmentPreviewLabel(idx)">
+              </ng-container>
+              <ng-template #composePreviewStripFileTpl>
+                <i class="fa-solid" [ngClass]="getFileIconClassByNameAndMimeType(item.name, item.mimeType)"></i>
+              </ng-template>
+            </button>
+            <button type="button" class="preview-strip-item add-more" (click)="addAnotherAttachment('image')" aria-label="Add image">
+              <i class="fa-solid fa-image"></i>
+            </button>
+            <button type="button" class="preview-strip-item add-more" (click)="addAnotherAttachment('document')" aria-label="Add document">
+              <i class="fa-regular fa-file-lines"></i>
+            </button>
+          </div>
+
+          <div class="compose-caption-row">
+            <textarea
+              class="preview-caption-input full"
+              [(ngModel)]="attachmentCaption"
+              rows="1"
+              placeholder="Type a message"
+              (keydown)="onAttachmentCaptionKeydown($event)"
+            ></textarea>
+            <button type="button" class="preview-send" [disabled]="!canSendAttachmentPreview" (click)="sendMessage()">
+              <i class="fa-solid fa-paper-plane"></i>
+              <span>{{ isUploadingAttachment ? 'Uploading...' : (isSending ? 'Sending...' : 'Send') }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="message-stream" *ngIf="!hasAttachmentDrafts" #messageScroller (scroll)="onMessageStreamScroll()">
         <div class="panel-state small" *ngIf="isLoadingMessages && !messages.length">
           Loading messages...
         </div>
@@ -81,32 +148,31 @@
           class="message-row"
           *ngFor="let message of messages; trackBy: trackMessage"
           [class.outgoing]="message.direction === 'outgoing'"
+          [class.image-row]="isImageFileMessage(message)"
         >
           <article class="bubble" [class.pending]="message.isPending">
             <ng-container *ngIf="isFileMessage(message); else textMessageTpl">
               <div class="file-message-card">
-                <a
+                <button
+                  type="button"
                   *ngIf="isImageFileMessage(message) && message.fileUrl"
                   class="image-preview-link"
-                  [href]="message.fileUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  (click)="openFileViewer(message)"
+                  aria-label="Open image preview"
                 >
                   <img class="image-preview" [src]="message.fileUrl" [alt]="message.filename || 'Image attachment'">
-                </a>
-                <div class="file-message-header">
+                </button>
+                <p class="image-caption" *ngIf="isImageFileMessage(message) && message.text && message.text !== message.filename && message.text !== 'image' && message.text !== 'Attachment'">
+                  {{ message.text }}
+                </p>
+                <div class="file-message-header" *ngIf="!isImageFileMessage(message)">
                   <i class="fa-solid" [ngClass]="getFileIconClass(message)"></i>
                   <span class="file-name">{{ message.filename || message.text }}</span>
                 </div>
-                <a
-                  *ngIf="message.fileUrl"
-                  class="file-download-link"
-                  [href]="message.fileUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Download
-                </a>
+                <div class="file-actions" *ngIf="message.fileUrl && !isImageFileMessage(message)">
+                  <button type="button" class="file-open-link" (click)="openFileViewer(message)">Open</button>
+                  <a class="file-download-link" [href]="message.fileUrl" [attr.download]="message.filename || 'attachment'">Download</a>
+                </div>
               </div>
             </ng-container>
             <ng-template #textMessageTpl>
@@ -157,46 +223,109 @@
         </button>
       </div>
 
-      <footer class="composer">
+      <footer class="composer" *ngIf="!hasAttachmentDrafts">
         <input
-          #attachmentInput
+          #imageAttachmentInput
           type="file"
           class="hidden-file-input"
-          accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx"
+          accept="image/*"
+          (change)="onAttachmentSelected($event)"
+        >
+        <input
+          #documentAttachmentInput
+          type="file"
+          class="hidden-file-input"
+          accept=".pdf,.doc,.docx,.xlsx,.xls"
           (change)="onAttachmentSelected($event)"
         >
         <div class="composer-input">
-          <div class="attachment-chip" *ngIf="selectedAttachment as attachment">
-            <i class="fa-solid fa-paperclip"></i>
-            <span>{{ attachment.name }}</span>
-            <button type="button" (click)="removeSelectedAttachment()" aria-label="Remove selected attachment">
-              <i class="fa-solid fa-xmark"></i>
-            </button>
+          <div class="composer-row">
+            <div class="composer-tools" *ngIf="!hasAttachmentDrafts">
+              <button
+                type="button"
+                class="tool-button emoji-button"
+                [class.active]="showEmojiPicker"
+                [disabled]="isSending || isUploadingAttachment"
+                (click)="toggleEmojiPicker()"
+                aria-label="Open emoji picker"
+              >
+                <i class="fa-regular fa-face-smile"></i>
+              </button>
+              <button
+                type="button"
+                class="tool-button attach-button-inline"
+                [class.active]="showAttachmentMenu"
+                [disabled]="isSending || isUploadingAttachment"
+                (click)="toggleAttachmentMenu()"
+                aria-label="Attach file"
+              >
+                <i class="fa-solid fa-paperclip"></i>
+              </button>
+            </div>
+            <textarea
+              [(ngModel)]="draftMessage"
+              rows="1"
+              placeholder="Type a message"
+              [disabled]="hasAttachmentDrafts"
+              (keydown)="onComposerKeydown($event)"
+            ></textarea>
           </div>
-          <textarea
-            [(ngModel)]="draftMessage"
-            rows="1"
-            placeholder="Type a message"
-            (keydown)="onComposerKeydown($event)"
-          ></textarea>
+          <div class="attachment-mode-hint" *ngIf="hasAttachmentDrafts">
+            Add caption in preview bubble and press Send.
+          </div>
           <div class="upload-progress" *ngIf="isUploadingAttachment">
             Uploading... {{ uploadProgress }}%
           </div>
+          <div class="emoji-picker" *ngIf="showEmojiPicker && !hasAttachmentDrafts">
+            <button
+              type="button"
+              class="emoji-item"
+              *ngFor="let emoji of quickEmojis"
+              (click)="insertEmoji(emoji)"
+            >
+              {{ emoji }}
+            </button>
+          </div>
+
+          <div class="attachment-menu" *ngIf="showAttachmentMenu && !hasAttachmentDrafts">
+            <button type="button" class="attachment-option" (click)="openAttachmentType('image')">
+              <i class="fa-regular fa-image"></i>
+              <span>Image</span>
+            </button>
+            <button type="button" class="attachment-option" (click)="openAttachmentType('document')">
+              <i class="fa-regular fa-file-lines"></i>
+              <span>Document</span>
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          class="attach-button"
-          [disabled]="isSending || isUploadingAttachment"
-          (click)="openAttachmentPicker()"
-          aria-label="Attach file"
-        >
-          <i class="fa-solid fa-paperclip"></i>
-        </button>
-        <button type="button" class="send-button" [disabled]="!canSend" (click)="sendMessage()">
+        <button type="button" class="send-button" [disabled]="!canSend || hasAttachmentDrafts" (click)="sendMessage()">
           <i class="fa-solid fa-paper-plane"></i>
-          <span>{{ isUploadingAttachment ? 'Uploading...' : (isSending ? 'Sending...' : 'Send') }}</span>
+          <span>{{ isSending ? 'Sending...' : 'Send' }}</span>
         </button>
       </footer>
+
+      <div class="image-viewer" *ngIf="activeFileViewer as viewer" (click)="closeFileViewer()">
+        <div class="image-viewer-content" (click)="$event.stopPropagation()">
+          <button type="button" class="image-viewer-close" (click)="closeFileViewer()" aria-label="Close file preview">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+          <ng-container *ngIf="viewer.isImage; else nonImageViewerTpl">
+            <img [src]="viewer.url" [alt]="viewer.name">
+          </ng-container>
+          <ng-template #nonImageViewerTpl>
+            <div class="file-viewer-stage" *ngIf="viewer.isPdf && activeFileViewerResourceUrl; else genericFileViewerTpl">
+              <iframe [src]="activeFileViewerResourceUrl" title="PDF preview"></iframe>
+            </div>
+            <ng-template #genericFileViewerTpl>
+              <div class="generic-file-viewer">
+                <i class="fa-solid" [ngClass]="getFileIconClassByNameAndMimeType(viewer.name, viewer.mimeType)"></i>
+                <p>{{ viewer.name }}</p>
+                <a [href]="viewer.url" [attr.download]="viewer.name">Download file</a>
+              </div>
+            </ng-template>
+          </ng-template>
+        </div>
+      </div>
     </ng-container>
 
     <ng-template #emptyState>

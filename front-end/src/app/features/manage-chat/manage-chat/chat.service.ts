@@ -48,7 +48,8 @@ export interface ApiListResponse<T> {
 
 export interface SendMessageRequest {
   to: string;
-  message: string;
+  text: string;
+  message?: string;
 }
 
 export interface SendMessageResponse {
@@ -56,6 +57,7 @@ export interface SendMessageResponse {
   data?: {
     provider?: string;
     messageId?: string;
+    type?: 'text' | 'template';
   };
   message?: string;
 }
@@ -82,6 +84,12 @@ export interface SendFileRequest {
   fileUrl: string;
   filename: string;
   mimeType?: string;
+}
+
+export interface SendTemplateRequest {
+  to: string;
+  templateId: string;
+  params: string[];
 }
 
 export interface RealtimeChatEvent {
@@ -157,7 +165,11 @@ export class ChatService {
   }
 
   sendMessage(data: SendMessageRequest): Observable<SendMessageResponse> {
-    return this.http.post<SendMessageResponse>('/api/chat/send', data);
+    return this.http.post<SendMessageResponse>('/api/chat/send', {
+      to: data.to,
+      text: data.text,
+      message: data.message || data.text,
+    });
   }
 
   uploadFile(file: File): Observable<UploadFileProgressEvent> {
@@ -195,6 +207,10 @@ export class ChatService {
 
   sendFile(data: SendFileRequest): Observable<SendMessageResponse> {
     return this.http.post<SendMessageResponse>('/api/chat/send-file', data);
+  }
+
+  sendTemplate(data: SendTemplateRequest): Observable<SendMessageResponse> {
+    return this.http.post<SendMessageResponse>('/api/chat/send-template', data);
   }
 
   onRealtimeUpdates(): Observable<RealtimeChatEvent> {

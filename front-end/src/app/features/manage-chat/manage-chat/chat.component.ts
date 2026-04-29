@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { environment } from '../../../../environments/environment';
 import { Subject, interval, of } from 'rxjs';
 import { catchError, startWith, switchMap, takeUntil } from 'rxjs/operators';
@@ -21,6 +22,18 @@ interface SelectedAttachment {
   file: File;
   name: string;
   mimeType: string;
+  isImage: boolean;
+  isPdf: boolean;
+  previewUrl?: string;
+  previewResourceUrl?: SafeResourceUrl | null;
+}
+
+interface ActiveFileViewer {
+  url: string;
+  name: string;
+  mimeType: string;
+  isImage: boolean;
+  isPdf: boolean;
 }
 
 @Component({
@@ -32,13 +45,15 @@ interface SelectedAttachment {
 })
 export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('messageScroller') private messageScroller?: ElementRef<HTMLDivElement>;
-  @ViewChild('attachmentInput') private attachmentInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('imageAttachmentInput') private imageAttachmentInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('documentAttachmentInput') private documentAttachmentInput?: ElementRef<HTMLInputElement>;
 
   conversations: ChatConversation[] = [];
   selectedConversation: ChatConversation | null = null;
   messages: PendingMessage[] = [];
   searchTerm = '';
   draftMessage = '';
+  attachmentCaption = '';
   isLoadingConversations = false;
   isLoadingMessages = false;
   isSending = false;
@@ -48,7 +63,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   showScrollToBottomButton = false;
   unreadNewMessages = 0;
   selectedAttachment: SelectedAttachment | null = null;
+  attachmentQueue: SelectedAttachment[] = [];
+  activeAttachmentIndex = -1;
   retryingMessageId: string | null = null;
+  activeFileViewer: ActiveFileViewer | null = null;
+  activeFileViewerResourceUrl: SafeResourceUrl | null = null;
+  showAttachmentMenu = false;
+  showEmojiPicker = false;
+  readonly quickEmojis = ['😀', '😂', '😊', '😍', '👍', '🙏', '🔥', '🎉', '❤️', '✅', '📌', '👋'];
 
   private readonly destroy$ = new Subject<void>();
   private readonly selectedConversation$ = new Subject<string>();
@@ -193,9 +215,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     ],
   };
   private pendingMessages: PendingMessage[] = [];
+  private outgoingFileCaptionByMessageId: Record<string, string> = {};
   private forceScrollOnNextMessageUpdate = false;
 
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly sanitizer: DomSanitizer,
+  ) {}
 
   ngOnInit(): void {
     this.startConversationPolling();
@@ -208,6 +234,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy(): void {
+    this.resetAttachmentDraftState();
+    this.activeFileViewer = null;
+    this.activeFileViewerResourceUrl = null;
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -231,10 +260,36 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   get canSend(): boolean {
     return (
       !!this.selectedConversation
-      && (!!this.draftMessage.trim() || !!this.selectedAttachment)
+      && (!!this.draftMessage.trim() || this.hasAttachmentDrafts)
       && !this.isSending
       && !this.isUploadingAttachment
     );
+  }
+
+  get canSendAttachmentPreview(): boolean {
+    return !!this.selectedConversation && this.attachmentQueue.length > 0 && !this.isSending && !this.isUploadingAttachment;
+  }
+
+  get isImageAttachmentSelected(): boolean {
+    const attachment = this.selectedAttachment;
+    if (!attachment) {
+      return false;
+    }
+
+    return attachment.isImage;
+  }
+
+  get isPdfAttachmentSelected(): boolean {
+    const attachment = this.selectedAttachment;
+    if (!attachment) {
+      return false;
+    }
+
+    return attachment.isPdf;
+  }
+
+  get hasAttachmentDrafts(): boolean {
+    return this.attachmentQueue.length > 0;
   }
 
   get isSessionActive(): boolean {
@@ -262,12 +317,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
   sendMessage(): void {
     const text = this.draftMessage.trim();
+    const attachmentText = this.attachmentCaption.trim();
     if (!this.selectedConversation || this.isSending || this.isUploadingAttachment) {
       return;
     }
 
-    if (this.selectedAttachment) {
-      this.sendAttachmentMessage(this.selectedConversation, text);
+    if (this.hasAttachmentDrafts) {
+      this.sendAttachmentMessage(this.selectedConversation, attachmentText);
       return;
     }
 
@@ -293,11 +349,16 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.chatService.sendMessage({
       to: selectedConversation.phoneNumber,
-      message: text,
+      text,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response) => {
         this.isSending = false;
-        this.resolvePendingMessage(localPendingId, response.data?.messageId);
+        const messageType = String(response.data?.type || 'text').toLowerCase();
+        this.resolvePendingMessage(
+          localPendingId,
+          response.data?.messageId,
+          messageType === 'template' ? { text: `${text}\n(Template sent - session expired)` } : undefined
+        );
       },
       error: () => {
         this.isSending = false;
@@ -306,8 +367,38 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  openAttachmentPicker(): void {
-    this.attachmentInput?.nativeElement.click();
+  toggleAttachmentMenu(): void {
+    if (this.isSending || this.isUploadingAttachment) {
+      return;
+    }
+
+    this.showAttachmentMenu = !this.showAttachmentMenu;
+    if (this.showAttachmentMenu) {
+      this.showEmojiPicker = false;
+    }
+  }
+
+  openAttachmentType(type: 'image' | 'document'): void {
+    this.showAttachmentMenu = false;
+
+    if (type === 'image') {
+      this.imageAttachmentInput?.nativeElement.click();
+      return;
+    }
+
+    this.documentAttachmentInput?.nativeElement.click();
+  }
+
+  toggleEmojiPicker(): void {
+    this.showEmojiPicker = !this.showEmojiPicker;
+    if (this.showEmojiPicker) {
+      this.showAttachmentMenu = false;
+    }
+  }
+
+  insertEmoji(emoji: string): void {
+    this.draftMessage += emoji;
+    this.showEmojiPicker = false;
   }
 
   onAttachmentSelected(event: Event): void {
@@ -317,17 +408,106 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
-    this.selectedAttachment = {
-      file,
-      name: file.name,
-      mimeType: file.type,
-    };
+    const normalizedMimeType = String(file.type || '').toLowerCase();
+    const normalizedName = String(file.name || '').toLowerCase();
+    const isImage = normalizedMimeType.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(normalizedName);
+    const isPdf = normalizedMimeType.includes('pdf') || normalizedName.endsWith('.pdf');
+    const previewUrl = (isImage || isPdf) ? URL.createObjectURL(file) : undefined;
+    const previewResourceUrl = (isPdf && previewUrl)
+      ? this.sanitizer.bypassSecurityTrustResourceUrl(previewUrl)
+      : null;
+
+    this.attachmentQueue = [
+      ...this.attachmentQueue,
+      {
+        file,
+        name: file.name,
+        mimeType: file.type,
+        isImage,
+        isPdf,
+        previewUrl,
+        previewResourceUrl,
+      }
+    ];
+    this.activeAttachmentIndex = this.attachmentQueue.length - 1;
+    this.selectedAttachment = this.attachmentQueue[this.activeAttachmentIndex] || null;
+    this.showAttachmentMenu = false;
+    this.showEmojiPicker = false;
+    this.queueScrollToBottom(true);
   }
 
   removeSelectedAttachment(): void {
+    if (this.activeAttachmentIndex < 0 || this.activeAttachmentIndex >= this.attachmentQueue.length) {
+      this.resetAttachmentDraftState();
+      return;
+    }
+
+    const removed = this.attachmentQueue[this.activeAttachmentIndex];
+    if (removed?.previewUrl) {
+      URL.revokeObjectURL(removed.previewUrl);
+    }
+
+    this.attachmentQueue = this.attachmentQueue.filter((_, index) => index !== this.activeAttachmentIndex);
+    if (!this.attachmentQueue.length) {
+      this.resetAttachmentDraftState();
+      return;
+    }
+
+    this.activeAttachmentIndex = Math.min(this.activeAttachmentIndex, this.attachmentQueue.length - 1);
+    this.selectedAttachment = this.attachmentQueue[this.activeAttachmentIndex] || null;
+  }
+
+  selectAttachmentDraft(index: number): void {
+    if (index < 0 || index >= this.attachmentQueue.length) {
+      return;
+    }
+
+    this.activeAttachmentIndex = index;
+    this.selectedAttachment = this.attachmentQueue[index];
+  }
+
+  removeAttachmentDraft(index: number): void {
+    if (index < 0 || index >= this.attachmentQueue.length) {
+      return;
+    }
+
+    this.activeAttachmentIndex = index;
+    this.removeSelectedAttachment();
+  }
+
+  getAttachmentPreviewLabel(index: number): string {
+    const item = this.attachmentQueue[index];
+    if (!item) {
+      return '';
+    }
+
+    return item.name || `Attachment ${index + 1}`;
+  }
+
+  isActiveAttachmentDraft(index: number): boolean {
+    return index === this.activeAttachmentIndex;
+  }
+
+  addAnotherAttachment(type: 'image' | 'document'): void {
+    this.openAttachmentType(type);
+  }
+
+  private resetAttachmentDraftState(): void {
+    this.attachmentQueue.forEach((item) => {
+      if (item.previewUrl) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
+    });
+
     this.selectedAttachment = null;
-    if (this.attachmentInput?.nativeElement) {
-      this.attachmentInput.nativeElement.value = '';
+    this.attachmentQueue = [];
+    this.activeAttachmentIndex = -1;
+    this.attachmentCaption = '';
+    if (this.imageAttachmentInput?.nativeElement) {
+      this.imageAttachmentInput.nativeElement.value = '';
+    }
+    if (this.documentAttachmentInput?.nativeElement) {
+      this.documentAttachmentInput.nativeElement.value = '';
     }
   }
 
@@ -337,6 +517,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     event.preventDefault();
+    this.showEmojiPicker = false;
+    this.showAttachmentMenu = false;
     this.sendMessage();
   }
 
@@ -383,11 +565,16 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.chatService.sendMessage({
       to: this.selectedConversation.phoneNumber,
-      message: retryText,
+      text: retryText,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response) => {
         this.retryingMessageId = null;
-        this.resolvePendingMessage(localPendingId, response.data?.messageId);
+        const messageType = String(response.data?.type || 'text').toLowerCase();
+        this.resolvePendingMessage(
+          localPendingId,
+          response.data?.messageId,
+          messageType === 'template' ? { text: `${retryText}\n(Template sent - session expired)` } : undefined
+        );
       },
       error: () => {
         this.retryingMessageId = null;
@@ -416,6 +603,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       || fallbackText === 'image'
       || fileUrl.includes('filemanager.gupshup.io')
     );
+  }
+
+  onAttachmentCaptionKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+    this.sendMessage();
   }
 
   canRetryMessage(message: PendingMessage): boolean {
@@ -456,6 +652,104 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     return 'fa-file';
+  }
+
+  isPdfFileMessage(message: PendingMessage): boolean {
+    if (!this.isFileMessage(message)) {
+      return false;
+    }
+
+    const fileName = String(message.filename || '').toLowerCase();
+    const mimeType = String(message.mimeType || '').toLowerCase();
+    return mimeType.includes('pdf') || fileName.endsWith('.pdf');
+  }
+
+  openFileViewer(message: PendingMessage): void {
+    const fileUrl = String(message.fileUrl || '').trim();
+    if (!fileUrl) {
+      return;
+    }
+
+    const name = String(message.filename || message.text || 'Attachment');
+    const mimeType = this.resolveMessageMimeType(message);
+    const isImage = this.isImageFileMessage(message);
+    const isPdf = this.isPdfFileMessage(message);
+
+    this.activeFileViewer = {
+      url: fileUrl,
+      name,
+      mimeType,
+      isImage,
+      isPdf,
+    };
+
+    this.activeFileViewerResourceUrl = isPdf
+      ? this.sanitizer.bypassSecurityTrustResourceUrl(fileUrl)
+      : null;
+  }
+
+  closeFileViewer(): void {
+    this.activeFileViewer = null;
+    this.activeFileViewerResourceUrl = null;
+  }
+
+  getSelectedAttachmentIconClass(): string {
+    const attachment = this.selectedAttachment;
+    if (!attachment) {
+      return 'fa-file';
+    }
+
+    return this.getFileIconClassByNameAndMimeType(attachment.name, attachment.mimeType);
+  }
+
+  getFileIconClassByNameAndMimeType(name: string, mimeType: string): string {
+    const normalizedName = String(name || '').toLowerCase();
+    const normalizedMimeType = String(mimeType || '').toLowerCase();
+
+    if (normalizedName.endsWith('.pdf') || normalizedMimeType.includes('pdf')) {
+      return 'fa-file-pdf';
+    }
+
+    if (
+      normalizedName.endsWith('.jpg')
+      || normalizedName.endsWith('.jpeg')
+      || normalizedName.endsWith('.png')
+      || normalizedMimeType.startsWith('image/')
+    ) {
+      return 'fa-file-image';
+    }
+
+    if (normalizedName.endsWith('.docx') || normalizedName.endsWith('.doc') || normalizedMimeType.includes('wordprocessingml')) {
+      return 'fa-file-word';
+    }
+
+    if (normalizedName.endsWith('.xlsx') || normalizedMimeType.includes('spreadsheetml')) {
+      return 'fa-file-excel';
+    }
+
+    return 'fa-file';
+  }
+
+  private resolveMessageMimeType(message: PendingMessage): string {
+    const explicitMimeType = String(message.mimeType || '').trim();
+    if (explicitMimeType) {
+      return explicitMimeType;
+    }
+
+    const fileName = String(message.filename || '').toLowerCase();
+    if (fileName.endsWith('.pdf')) {
+      return 'application/pdf';
+    }
+
+    if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) {
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+
+    if (fileName.endsWith('.xlsx')) {
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    }
+
+    return 'application/octet-stream';
   }
 
   private startConversationPolling(): void {
@@ -619,41 +913,65 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private sendAttachmentMessage(conversation: ChatConversation, text: string): void {
-    const attachment = this.selectedAttachment;
-    if (!attachment) {
+    const attachments = [...this.attachmentQueue];
+    if (!attachments.length) {
       return;
     }
 
     if (this.isMockConversation(conversation._id)) {
-      this.addMockOutgoingFileMessage(conversation, attachment);
-      this.draftMessage = '';
-      this.removeSelectedAttachment();
-      this.syncSelectedConversationPreview(attachment.name || text || 'Attachment', conversation._id);
+      attachments.forEach((item) => this.addMockOutgoingFileMessage(conversation, item));
+      this.resetAttachmentDraftState();
+      this.syncSelectedConversationPreview(attachments[attachments.length - 1]?.name || text || 'Attachment', conversation._id);
       this.queueScrollToBottom(true);
       return;
     }
 
-    const localPendingId = this.buildLocalPendingMessageId();
-    this.addOptimisticOutgoingFileMessage(conversation, attachment, localPendingId, text);
+    const pendingIds = attachments.map(() => this.buildLocalPendingMessageId());
+    attachments.forEach((item, index) => {
+      const caption = index === 0 ? text : '';
+      this.addOptimisticOutgoingFileMessage(conversation, item, pendingIds[index], caption);
+    });
     this.queueScrollToBottom(true);
 
     this.isSending = true;
     this.isUploadingAttachment = true;
     this.uploadProgress = 0;
 
+    this.sendAttachmentBatch(conversation, attachments, pendingIds, text, 0);
+  }
+
+  private sendAttachmentBatch(
+    conversation: ChatConversation,
+    attachments: SelectedAttachment[],
+    pendingIds: string[],
+    captionText: string,
+    index: number
+  ): void {
+    if (index >= attachments.length) {
+      this.isSending = false;
+      this.isUploadingAttachment = false;
+      this.uploadProgress = 0;
+      this.resetAttachmentDraftState();
+      this.syncSelectedConversationPreview(attachments[attachments.length - 1]?.name || 'Attachment', conversation._id);
+      this.queueScrollToBottom(true);
+      return;
+    }
+
+    const attachment = attachments[index];
+    const localPendingId = pendingIds[index];
     this.chatService.uploadFile(attachment.file).pipe(takeUntil(this.destroy$)).subscribe({
       next: (uploadEvent) => {
         if (!uploadEvent.done) {
-          this.uploadProgress = uploadEvent.progress;
+          const baseProgress = (index / attachments.length) * 100;
+          const currentProgress = (uploadEvent.progress / attachments.length);
+          this.uploadProgress = Math.min(99, Math.round(baseProgress + currentProgress));
           return;
         }
 
         const uploadedData = uploadEvent.data;
         if (!uploadedData?.url) {
-          this.isSending = false;
-          this.isUploadingAttachment = false;
-          this.uploadProgress = 0;
           this.markPendingMessageFailed(localPendingId);
+          this.sendAttachmentBatch(conversation, attachments, pendingIds, captionText, index + 1);
           return;
         }
 
@@ -672,32 +990,28 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
         this.chatService.sendFile(sendPayload).pipe(takeUntil(this.destroy$)).subscribe({
           next: (sendResponse) => {
-            this.isSending = false;
-            this.isUploadingAttachment = false;
-            this.uploadProgress = 0;
+            const resolvedMessageId = String(sendResponse.data?.messageId || localPendingId);
+            if (captionText && index === 0) {
+              this.outgoingFileCaptionByMessageId[resolvedMessageId] = captionText;
+            }
+
             this.resolvePendingMessage(localPendingId, sendResponse.data?.messageId, {
               fileUrl: uploadedData?.url,
               filename: uploadedData?.filename,
               mimeType: uploadedData?.mimeType,
             });
-            this.draftMessage = '';
-            this.removeSelectedAttachment();
-            this.syncSelectedConversationPreview(uploadedData?.filename || 'Attachment', conversation._id);
-            this.queueScrollToBottom(true);
+
+            this.sendAttachmentBatch(conversation, attachments, pendingIds, captionText, index + 1);
           },
           error: () => {
-            this.isSending = false;
-            this.isUploadingAttachment = false;
-            this.uploadProgress = 0;
             this.markPendingMessageFailed(localPendingId);
+            this.sendAttachmentBatch(conversation, attachments, pendingIds, captionText, index + 1);
           },
         });
       },
       error: () => {
-        this.isSending = false;
-        this.isUploadingAttachment = false;
-        this.uploadProgress = 0;
         this.markPendingMessageFailed(localPendingId);
+        this.sendAttachmentBatch(conversation, attachments, pendingIds, captionText, index + 1);
       },
     });
   }
@@ -716,6 +1030,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
         file: new File([], message.filename, { type: message.mimeType || 'application/octet-stream' }),
         name: message.filename,
         mimeType: message.mimeType || '',
+        isImage: this.isImageFileMessage(message),
+        isPdf: this.isPdfFileMessage(message),
+        previewUrl: undefined,
+        previewResourceUrl: null,
       },
       localPendingId,
       message.text || message.filename
@@ -758,7 +1076,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       conversationId: conversation._id,
       from: 'me',
       to: conversation.phoneNumber,
-      text: attachment.name || fallbackText || 'Attachment',
+      text: fallbackText || attachment.name || 'Attachment',
       type: 'file',
       fileUrl: '',
       filename: attachment.name,
@@ -822,10 +1140,32 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private mergePendingMessages(serverMessages: ChatMessage[]): PendingMessage[] {
-    const seenIds = new Set(serverMessages.map((message) => message.messageId));
+    const decoratedServerMessages = serverMessages.map((message) => {
+      if (message.type !== 'file' || message.direction !== 'outgoing') {
+        return message;
+      }
+
+      const caption = this.outgoingFileCaptionByMessageId[message.messageId];
+      if (!caption) {
+        return message;
+      }
+
+      const messageText = String(message.text || '').trim();
+      const fileName = String(message.filename || '').trim();
+      if (!messageText || (fileName && messageText === fileName) || messageText === 'Attachment') {
+        return {
+          ...message,
+          text: caption,
+        };
+      }
+
+      return message;
+    });
+
+    const seenIds = new Set(decoratedServerMessages.map((message) => message.messageId));
     this.pendingMessages = this.pendingMessages.filter((message) => !seenIds.has(message.messageId));
 
-    return [...serverMessages, ...this.pendingMessages].sort((a, b) => {
+    return [...decoratedServerMessages, ...this.pendingMessages].sort((a, b) => {
       return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
     });
   }

@@ -1,4 +1,6 @@
-const { sendGupshupTextMessage, sendGupshupFileMessage } = require('../services/gupshupApiService');
+const { sendGupshupTextMessage, sendGupshupFileMessage, sendGupshupTemplateMessage } = require('../services/gupshupApiService');
+const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
 const {
   saveMessage,
   updateMessageStatus,
@@ -9,23 +11,56 @@ const {
 } = require('../services/chatMessageStore');
 const { emitChatUpdate } = require('../services/socketService');
 
+const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const isSessionActiveForPhone = async (phoneNumber) => {
+  const normalizedPhone = normalizePhone(phoneNumber);
+  if (!normalizedPhone) {
+    return false;
+  }
+
+  const conversation = await Conversation.findOne({ phoneNumber: normalizedPhone }).select('_id');
+  if (!conversation?._id) {
+    return false;
+  }
+
+  const since = new Date(Date.now() - SESSION_WINDOW_MS);
+  const recentIncoming = await Message.findOne({
+    conversationId: conversation._id,
+    direction: { $in: ['in', 'incoming'] },
+    timestamp: { $gte: since },
+  }).sort({ timestamp: -1 }).select('_id');
+
+  return Boolean(recentIncoming);
+};
+
 // POST /api/chat/send
 // Sends a WhatsApp message through Gupshup and stores a local outgoing record.
 exports.sendChatMessage = async (req, res, next) => {
   try {
-    const { to, message } = req.body || {};
+    const { to, message, text } = req.body || {};
+    const messageText = String(text || message || '').trim();
 
-    if (!to || !message) {
-      return res.status(400).json({ success: false, message: 'to and message are required.' });
+    if (!to || !messageText) {
+      return res.status(400).json({ success: false, message: 'to and text are required.' });
     }
 
-    const result = await sendGupshupTextMessage({ to, message });
+    const hasActiveSession = await isSessionActiveForPhone(to);
+    const defaultTemplateId = process.env.GUPSHUP_DEFAULT_TEMPLATE_ID || 'welcome_template_v1';
+    const result = hasActiveSession
+      ? await sendGupshupTextMessage({ to, message: messageText })
+      : await sendGupshupTemplateMessage({
+        to,
+        templateId: defaultTemplateId,
+        params: [messageText],
+      });
     const messageId = result.messageId || `local-${Date.now()}`;
+    const dispatchedType = hasActiveSession ? 'text' : 'template';
 
     await saveMessage({
       messageId,
       phone: to,
-      text: message,
+      text: messageText,
       type: 'text',
       direction: 'out',
       status: 'sent',
@@ -39,12 +74,14 @@ exports.sendChatMessage = async (req, res, next) => {
       phone: normalizePhone(to),
       messageId,
       status: 'sent',
+      text: messageText,
     });
 
     return res.status(200).json({
       success: true,
       data: {
         messageId,
+        type: dispatchedType,
       },
     });
   } catch (error) {
@@ -109,6 +146,59 @@ exports.sendChatFile = async (req, res, next) => {
       success: true,
       data: {
         messageId,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/chat/send-template
+// Sends a WhatsApp template message through Gupshup and stores a local outgoing record.
+exports.sendChatTemplate = async (req, res, next) => {
+  try {
+    const { to, templateId, params } = req.body || {};
+
+    if (!to || !templateId) {
+      return res.status(400).json({
+        success: false,
+        message: 'to and templateId are required.',
+      });
+    }
+
+    const templateParams = Array.isArray(params) ? params : [];
+    const result = await sendGupshupTemplateMessage({
+      to,
+      templateId,
+      params: templateParams,
+    });
+    const messageId = result.messageId || `local-template-${Date.now()}`;
+
+    const summaryText = `Template: ${templateId}`;
+    await saveMessage({
+      messageId,
+      phone: to,
+      text: summaryText,
+      type: 'text',
+      direction: 'out',
+      status: 'sent',
+      timestamp: new Date(),
+      destination: to,
+      source: process.env.GUPSHUP_SOURCE || '916384322139',
+    });
+
+    emitChatUpdate({
+      eventType: 'outgoing',
+      phone: normalizePhone(to),
+      messageId,
+      status: 'sent',
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        messageId,
+        status: 'sent',
       },
     });
   } catch (error) {
@@ -322,6 +412,16 @@ exports.processGupshupWebhook = async (body) => {
       source,
       destination,
     });
+
+    // Auto-create client record for unknown inbound senders
+    if (!isFromBusiness && phone) {
+      try {
+        const { findOrCreateClientByMobile } = require('./clientController');
+        await findOrCreateClientByMobile(phone);
+      } catch (_) {
+        // Non-critical – never block message save
+      }
+    }
 
     emitChatUpdate({
       eventType: isFromBusiness ? 'outgoing' : 'incoming',

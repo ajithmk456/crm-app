@@ -46,6 +46,12 @@
         <p>Create, preview, and download invoice reports</p>
       </div>
 
+      <div class="card" *ngIf="isAdmin" (click)="nav('clients')">
+        <div class="icon icon-client"><i class="fa-solid fa-address-book"></i></div>
+        <h3>Manage Client</h3>
+        <p>Add, edit, and manage client contacts</p>
+      </div>
+
       <div class="card" *ngIf="showMyTask" (click)="goToMyTask()">
         <div class="icon icon-my-task"><i class="fa-solid fa-list-check"></i></div>
         <h3>My Task</h3>

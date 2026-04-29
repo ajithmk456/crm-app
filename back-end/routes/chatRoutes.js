@@ -1,5 +1,5 @@
 const express = require('express');
-const { sendChatMessage, sendChatFile, getChatByPhone, getChatConversations } = require('../controllers/chatController');
+const { sendChatMessage, sendChatFile, sendChatTemplate, getChatByPhone, getChatConversations } = require('../controllers/chatController');
 
 const router = express.Router();
 
@@ -25,14 +25,18 @@ const router = express.Router();
  *             type: object
  *             required:
  *               - to
- *               - message
+ *               - text
  *             properties:
  *               to:
  *                 type: string
  *                 example: "919999999999"
+ *               text:
+ *                 type: string
+ *                 example: "Hello from CRM"
  *               message:
  *                 type: string
  *                 example: "Hello from CRM"
+ *                 description: Backward-compatible alias for text
  *     responses:
  *       200:
  *         description: Message accepted by Gupshup
@@ -85,6 +89,43 @@ router.post('/send', sendChatMessage);
  */
 // Sends outbound WhatsApp file through Gupshup.
 router.post('/send-file', sendChatFile);
+
+/**
+ * @openapi
+ * /api/chat/send-template:
+ *   post:
+ *     tags:
+ *       - Chat
+ *     summary: Send approved WhatsApp template through Gupshup
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - to
+ *               - templateId
+ *             properties:
+ *               to:
+ *                 type: string
+ *                 example: "919999999999"
+ *               templateId:
+ *                 type: string
+ *                 example: "welcome_template_v1"
+ *               params:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Template message accepted by Gupshup
+ *       400:
+ *         description: Invalid payload
+ *       500:
+ *         description: Provider or server error
+ */
+router.post('/send-template', sendChatTemplate);
 
 /**
  * @openapi

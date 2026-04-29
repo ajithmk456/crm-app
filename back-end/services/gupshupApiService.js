@@ -132,8 +132,35 @@ const sendGupshupFileMessage = async ({ to, fileUrl, filename, mimeType }) => {
   return sendGupshupMessage(form);
 };
 
+const sendGupshupTemplateMessage = async ({ to, templateId, params = [] }) => {
+  const destination = normalizeDestination(to);
+  if (!destination) {
+    throw new Error('A valid destination number is required.');
+  }
+
+  if (!templateId) {
+    throw new Error('templateId is required to send a template message.');
+  }
+
+  const normalizedParams = Array.isArray(params)
+    ? params.map((value) => String(value ?? ''))
+    : [];
+
+  const form = buildBaseForm(destination);
+  form.append('message', JSON.stringify({
+    type: 'template',
+    template: {
+      id: String(templateId),
+      params: normalizedParams,
+    },
+  }));
+
+  return sendGupshupMessage(form);
+};
+
 module.exports = {
   normalizeDestination,
   sendGupshupTextMessage,
   sendGupshupFileMessage,
+  sendGupshupTemplateMessage,
 };

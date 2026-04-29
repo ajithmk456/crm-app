@@ -13,6 +13,7 @@ import { ProfileComponent } from './features/profile/profile.component';
 import { ContactUsComponent } from './features/contact-us/contact-us.component';
 import { ManageReportComponent } from './features/manage-report/manage-report.component';
 import { SuperadminCreateAdminComponent } from './features/superadmin-create-admin/superadmin-create-admin.component';
+import { ManageClientComponent } from './features/manage-client/manage-client/manage-client.component';
 import { AuthGuard } from './core/auth.guard';
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -57,6 +58,12 @@ export const routes: Routes = [
         component: ProfileComponent,
         canActivate: [AuthGuard],
         data: { breadcrumb: 'My Profile' }
+      },
+      {
+        path: 'clients',
+        component: ManageClientComponent,
+        canActivate: [AuthGuard],
+        data: { role: 'admin', breadcrumb: 'Manage Clients' }
       }
     ]
   }
