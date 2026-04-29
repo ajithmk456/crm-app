@@ -248,13 +248,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     return this.conversations.filter((conversation) => {
-      return [conversation.phoneNumber, conversation.lastMessage]
+      return [conversation.clientName || '', conversation.phoneNumber, conversation.lastMessage]
         .some((value) => (value || '').toLowerCase().includes(term));
     });
   }
 
   get activeConversationTitle(): string {
-    return this.selectedConversation?.phoneNumber || 'Select a conversation';
+    return this.selectedConversation?.clientName || this.selectedConversation?.phoneNumber || 'Select a conversation';
   }
 
   get canSend(): boolean {

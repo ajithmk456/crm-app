@@ -1,6 +1,7 @@
 const { sendGupshupTextMessage, sendGupshupFileMessage, sendGupshupTemplateMessage } = require('../services/gupshupApiService');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
+const Client = require('../models/Client');
 const {
   saveMessage,
   updateMessageStatus,
@@ -474,10 +475,46 @@ exports.getChatByPhone = async (req, res, next) => {
 // Returns chat conversation summaries for sidebar listing.
 exports.getChatConversations = async (req, res, next) => {
   try {
-    const conversations = (await getConversationSummaries()).map((item) => ({
-      ...item,
-      updatedAt: new Date(item.updatedAt).toISOString(),
-    }));
+    const rawConversations = await getConversationSummaries();
+    const phoneKeys = [...new Set(rawConversations.map((item) => normalizePhone(item.phoneNumber)).filter(Boolean))];
+
+    const lookupValues = [...new Set(phoneKeys.flatMap((phone) => {
+      const withCountryCode = phone.startsWith('91') ? phone : `91${phone}`;
+      return [phone, withCountryCode, `+${phone}`, `+${withCountryCode}`];
+    }))];
+
+    const clients = lookupValues.length
+      ? await Client.find({
+          $or: [
+            { mobile: { $in: lookupValues } },
+            { alternateMobile: { $in: lookupValues } },
+          ],
+        }).select('name mobile alternateMobile')
+      : [];
+
+    const nameByPhone = new Map();
+    clients.forEach((client) => {
+      const normalizedMobile = normalizePhone(client.mobile || '');
+      const normalizedAlternate = normalizePhone(client.alternateMobile || '');
+
+      if (normalizedMobile && !nameByPhone.has(normalizedMobile)) {
+        nameByPhone.set(normalizedMobile, client.name);
+      }
+      if (normalizedAlternate && !nameByPhone.has(normalizedAlternate)) {
+        nameByPhone.set(normalizedAlternate, client.name);
+      }
+    });
+
+    const conversations = rawConversations.map((item) => {
+      const normalizedPhone = normalizePhone(item.phoneNumber);
+      const matchedName = nameByPhone.get(normalizedPhone) || '';
+
+      return {
+        ...item,
+        clientName: matchedName,
+        updatedAt: new Date(item.updatedAt).toISOString(),
+      };
+    });
 
     return res.status(200).json({
       success: true,

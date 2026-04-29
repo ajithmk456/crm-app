@@ -32,9 +32,10 @@
         <div class="avatar">{{ conversation.phoneNumber.slice(-2) }}</div>
         <div class="conversation-copy">
           <div class="conversation-row">
-            <h3>{{ conversation.phoneNumber }}</h3>
+            <h3>{{ conversation.clientName || conversation.phoneNumber }}</h3>
             <time>{{ conversation.updatedAt | date:'shortTime' }}</time>
           </div>
+          <p class="conversation-phone" *ngIf="conversation.clientName">{{ conversation.phoneNumber }}</p>
           <p>{{ conversation.lastMessage || 'No messages yet' }}</p>
         </div>
       </button>
@@ -63,7 +64,10 @@
                 <span class="session-text">{{ sessionStateLabel }}</span>
               </span>
             </div>
-            <p><span class="online-dot"></span> synced live</p>
+            <p>
+              <ng-container *ngIf="selectedConversation.clientName">{{ selectedConversation.phoneNumber }} • </ng-container>
+              <span class="online-dot"></span> synced live
+            </p>
           </div>
         </div>
       </header>

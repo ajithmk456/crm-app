@@ -6,6 +6,7 @@ import { io, Socket } from 'socket.io-client';
 export interface ChatConversation {
   _id: string;
   phoneNumber: string;
+  clientName?: string;
   lastMessage: string;
   updatedAt: string;
   createdAt?: string;
