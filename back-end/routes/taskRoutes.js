@@ -9,6 +9,7 @@ const {
   deleteTask,
   sendTaskReminder,
   getTaskReminderLogs,
+  addTaskAttachment,
 } = require('../controllers/taskController');
 const { protect } = require('../middleware/authMiddleware');
 const { authorizeRole } = require('../middleware/roleMiddleware');
@@ -264,5 +265,44 @@ router.post('/:id/reminder', protect, sendTaskReminder);
  *         description: Reminder logs
  */
 router.get('/:taskId/reminder-logs', protect, getTaskReminderLogs);
+
+/**
+ * @openapi
+ * /api/tasks/{id}/attachments:
+ *   post:
+ *     tags:
+ *       - Task
+ *     summary: Add attachment proof to a task
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - url
+ *               - fileName
+ *             properties:
+ *               url:
+ *                 type: string
+ *               fileName:
+ *                 type: string
+ *               mimeType:
+ *                 type: string
+ *               note:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Attachment added
+ */
+router.post('/:id/attachments', protect, addTaskAttachment);
 
 module.exports = router;

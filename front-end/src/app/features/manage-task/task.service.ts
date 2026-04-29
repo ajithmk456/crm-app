@@ -2,6 +2,16 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
+export interface TaskAttachment {
+  _id?: string;
+  url: string;
+  fileName: string;
+  mimeType?: string;
+  note?: string;
+  uploadedBy?: string;
+  uploadedAt?: string;
+}
+
 export interface Task {
   _id?: string;
   title: string;
@@ -18,6 +28,17 @@ export interface Task {
   reminderBefore?: string | number;
   reminderTime?: string;
   reminderSent?: boolean;
+  attachments?: TaskAttachment[];
+}
+
+export interface UploadFileResponse {
+  success: boolean;
+  data?: {
+    url: string;
+    filename: string;
+    mimeType: string;
+  };
+  message?: string;
 }
 
 export interface UpcomingReminder {
@@ -61,6 +82,16 @@ export class TaskService {
 
   updateTask(id: string, task: Task): Observable<TaskResponse> {
     return this.http.put<TaskResponse>(`/api/tasks/${id}`, task);
+  }
+
+  uploadTaskFile(file: File): Observable<UploadFileResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<UploadFileResponse>('/api/files/upload', formData);
+  }
+
+  addTaskAttachment(taskId: string, payload: { url: string; fileName: string; mimeType?: string; note?: string }): Observable<TaskResponse> {
+    return this.http.post<TaskResponse>(`/api/tasks/${taskId}/attachments`, payload);
   }
 
   deleteTask(id: string): Observable<TaskResponse> {

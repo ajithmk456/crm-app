@@ -401,3 +401,42 @@ exports.getTaskReminderLogs = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.addTaskAttachment = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { url, fileName, mimeType, note } = req.body;
+
+    if (!url || !fileName) {
+      return res.status(400).json({ success: false, message: 'url and fileName are required.' });
+    }
+
+    const task = await Task.findOne({ _id: id, ...(await buildAdminTaskScope(req.user)) });
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    if (!isAdminUser(req.user)) {
+      const assignedIds = await resolveAssignedIdsForUser(req.user);
+      const taskAssignedId = String(task.assignedTo || '');
+      if (!assignedIds.includes(taskAssignedId)) {
+        return res.status(403).json({ success: false, message: 'Forbidden: not assigned to this task' });
+      }
+    }
+
+    task.attachments.push({
+      url,
+      fileName,
+      mimeType: mimeType || '',
+      note: note || '',
+      uploadedBy: req.user?._id,
+      uploadedAt: new Date(),
+    });
+
+    await task.save();
+    const updatedTask = await Task.findById(task._id).populate('assignedTo', 'fullName email phone');
+    return res.status(200).json({ success: true, data: updatedTask });
+  } catch (error) {
+    next(error);
+  }
+};

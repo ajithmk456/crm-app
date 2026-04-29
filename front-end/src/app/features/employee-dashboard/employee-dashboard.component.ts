@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { Task, TaskService } from '../manage-task/task.service';
+import { ToastrService } from 'ngx-toastr';
 
 type DashboardFilter = 'all' | 'open' | 'in-progress' | 'report-sent' | 'completed' | 'overdue' | 'high-priority';
 
@@ -23,12 +24,16 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
   activeFilter: DashboardFilter = 'all';
   loading = false;
   actionLoading = new Set<string>();
+  isUploadingProof = false;
+  proofNote = '';
+  proofFile: File | null = null;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private taskService: TaskService,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private toastr: ToastrService,
   ) {}
 
   ngOnInit(): void {
@@ -102,11 +107,73 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
   openTaskDetails(task: Task): void {
     this.selectedTask = task;
     this.isTaskDetailOpen = true;
+    this.proofFile = null;
+    this.proofNote = '';
   }
 
   closeTaskDetails(): void {
     this.isTaskDetailOpen = false;
     this.selectedTask = null;
+    this.proofFile = null;
+    this.proofNote = '';
+  }
+
+  onProofFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.proofFile = input.files?.[0] || null;
+  }
+
+  uploadProof(task: Task): void {
+    if (!task?._id) {
+      return;
+    }
+
+    if (!this.proofFile) {
+      this.toastr.error('Please select a proof file first.', 'Validation');
+      return;
+    }
+
+    this.isUploadingProof = true;
+    this.taskService.uploadTaskFile(this.proofFile).subscribe({
+      next: (uploadResponse) => {
+        const data = uploadResponse.data;
+        if (!uploadResponse.success || !data?.url || !data?.filename) {
+          this.isUploadingProof = false;
+          this.toastr.error(uploadResponse.message || 'Failed to upload file.', 'Error');
+          return;
+        }
+
+        this.taskService.addTaskAttachment(task._id!, {
+          url: data.url,
+          fileName: data.filename,
+          mimeType: data.mimeType,
+          note: this.proofNote.trim(),
+        }).subscribe({
+          next: (response) => {
+            this.isUploadingProof = false;
+            if (response.success && response.data && !Array.isArray(response.data)) {
+              const updated = response.data as Task;
+              this.selectedTask = updated;
+              this.allTasks = this.allTasks.map((item) => (item._id === updated._id ? updated : item));
+              this.applyFilter();
+              this.proofFile = null;
+              this.proofNote = '';
+              this.toastr.success('Proof attachment added to task.', 'Success');
+            } else {
+              this.toastr.error(response.message || 'Failed to attach proof.', 'Error');
+            }
+          },
+          error: () => {
+            this.isUploadingProof = false;
+            this.toastr.error('Failed to attach proof.', 'Error');
+          },
+        });
+      },
+      error: () => {
+        this.isUploadingProof = false;
+        this.toastr.error('Failed to upload proof file.', 'Error');
+      },
+    });
   }
 
   isTaskBusy(task: Task | null): boolean {

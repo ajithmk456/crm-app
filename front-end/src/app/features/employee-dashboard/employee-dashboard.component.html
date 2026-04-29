@@ -176,6 +176,28 @@
       </div>
     </div>
 
+    <div class="task-proof-section">
+      <h4>Proof Attachments</h4>
+      <div class="proof-upload-row">
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx" (change)="onProofFileSelected($event)">
+        <input type="text" placeholder="Optional note" [(ngModel)]="proofNote">
+        <button type="button" class="btn-inline report-sent" [disabled]="!proofFile || isUploadingProof" (click)="uploadProof(selectedTask)">
+          <i class="fa-solid fa-paperclip"></i>
+          {{ isUploadingProof ? 'Uploading...' : 'Upload Proof' }}
+        </button>
+      </div>
+
+      <div class="proof-list" *ngIf="selectedTask.attachments?.length; else noProofTpl">
+        <a class="proof-item" *ngFor="let item of selectedTask.attachments" [href]="item.url" target="_blank" rel="noopener">
+          <i class="fa-regular fa-file-lines"></i>
+          <span>{{ item.fileName }}</span>
+        </a>
+      </div>
+      <ng-template #noProofTpl>
+        <p class="proof-empty">No proof files attached yet.</p>
+      </ng-template>
+    </div>
+
     <div class="task-detail-actions">
       <button
         class="btn-inline start"

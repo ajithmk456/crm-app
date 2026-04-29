@@ -17,6 +17,19 @@ const taskSchema = new mongoose.Schema(
     reminderTime: { type: Date, description: 'Calculated reminder trigger time' },
     reminderSent: { type: Boolean, default: false },
     reminderScheduleId: { type: String, description: 'ID of scheduled cron job for cleanup' },
+    attachments: {
+      type: [
+        {
+          url: { type: String, required: true },
+          fileName: { type: String, required: true },
+          mimeType: { type: String, default: '' },
+          note: { type: String, default: '' },
+          uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+          uploadedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
     adminOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   },
   { timestamps: true }
