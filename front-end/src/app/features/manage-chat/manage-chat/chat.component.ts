@@ -3,6 +3,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } fr
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute } from '@angular/router';
+import { Router } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { Subject, interval, of } from 'rxjs';
 import { catchError, startWith, switchMap, takeUntil } from 'rxjs/operators';
@@ -219,18 +220,39 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   private outgoingFileCaptionByMessageId: Record<string, string> = {};
   private forceScrollOnNextMessageUpdate = false;
   private targetConversationPhone = '';
+  private hasSanitizedPhoneQueryParam = false;
 
   constructor(
     private readonly chatService: ChatService,
     private readonly sanitizer: DomSanitizer,
     private readonly route: ActivatedRoute,
+    private readonly router: Router,
   ) {}
 
   ngOnInit(): void {
+    const statePhone = this.normalizePhone(window.history.state?.targetPhone || '');
+    if (statePhone) {
+      this.targetConversationPhone = statePhone;
+    }
+
     this.route.queryParamMap
       .pipe(takeUntil(this.destroy$))
       .subscribe((params) => {
-        this.targetConversationPhone = this.normalizePhone(params.get('phone') || '');
+        const queryPhone = this.normalizePhone(params.get('phone') || '');
+        if (queryPhone) {
+          this.targetConversationPhone = queryPhone;
+        }
+
+        if (params.has('phone') && !this.hasSanitizedPhoneQueryParam) {
+          this.hasSanitizedPhoneQueryParam = true;
+          this.router.navigate([], {
+            relativeTo: this.route,
+            queryParams: { phone: null },
+            queryParamsHandling: 'merge',
+            replaceUrl: true,
+          });
+        }
+
         if (!this.targetConversationPhone) {
           return;
         }

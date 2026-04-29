@@ -226,7 +226,9 @@ export class ManageClientComponent implements OnInit {
   // ─── Open Chat ────────────────────────────────────────────────────────────────
 
   openChat(client: Client): void {
-    this.router.navigate(['/manage-chat'], { queryParams: { phone: client.mobile } });
+    this.router.navigate(['/manage-chat'], {
+      state: { targetPhone: client.mobile },
+    });
   }
 
   // ─── Bulk Upload ──────────────────────────────────────────────────────────────
