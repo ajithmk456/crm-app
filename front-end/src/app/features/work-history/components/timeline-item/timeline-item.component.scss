@@ -1,0 +1,153 @@
+.timeline-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 12px;
+}
+
+.line-node {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 0 0 4px #fff;
+  z-index: 1;
+}
+
+.line-node.info {
+  background: #2563eb;
+}
+
+.line-node.task {
+  background: #7c3aed;
+}
+
+.line-node.assignment {
+  background: #ea580c;
+}
+
+.line-node.picked {
+  background: #ca8a04;
+}
+
+.line-node.report {
+  background: #16a34a;
+}
+
+.line-node.payment {
+  background: #166534;
+}
+
+.content-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.content-card.latest {
+  background: #f8fbff;
+  border-color: #bfdbfe;
+}
+
+.top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+
+  h4 {
+    margin: 0;
+    color: #0f172a;
+    font-size: 15px;
+  }
+}
+
+.latest-badge {
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 9px;
+}
+
+.desc {
+  margin: 8px 0 0;
+  color: #334155;
+  font-size: 13px;
+}
+
+.meta-row {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.meta-item {
+  color: #64748b;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.details-toggle {
+  margin-top: 8px;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.details {
+  margin-top: 10px;
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 10px;
+}
+
+.detail-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) 1fr;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 6px;
+
+  .k {
+    color: #64748b;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+
+  .v {
+    color: #1e293b;
+    word-break: break-word;
+  }
+}
+
+@media (max-width: 768px) {
+  .timeline-item {
+    grid-template-columns: 32px 1fr;
+    gap: 10px;
+  }
+
+  .line-node {
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+  }
+
+  .detail-row {
+    grid-template-columns: 1fr;
+  }
+}

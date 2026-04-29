@@ -4,11 +4,18 @@ import { FormsModule } from '@angular/forms';
 import { ClientService, Client } from '../manage-client/client.service';
 import { TaskService, Task } from '../manage-task/task.service';
 import { WorkHistoryItem, WorkHistoryService } from './work-history.service';
+import { TimelineItemComponent } from './components/timeline-item/timeline-item.component';
+
+interface HistoryGroup {
+  key: string;
+  label: string;
+  items: WorkHistoryItem[];
+}
 
 @Component({
   selector: 'app-work-history',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TimelineItemComponent],
   templateUrl: './work-history.component.html',
   styleUrl: './work-history.component.scss',
 })
@@ -33,6 +40,45 @@ export class WorkHistoryComponent implements OnInit {
   ngOnInit(): void {
     this.loadFilters();
     this.loadHistory();
+  }
+
+  get groupedTimeline(): HistoryGroup[] {
+    const groups = new Map<string, WorkHistoryItem[]>();
+    this.items.forEach((item) => {
+      const key = this.dayKey(item.createdAt);
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)?.push(item);
+    });
+
+    return [...groups.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([key, groupItems]) => ({
+        key,
+        label: this.groupLabel(key),
+        items: groupItems,
+      }));
+  }
+
+  get totalTasks(): number {
+    return this.tasks.length;
+  }
+
+  get completedTasks(): number {
+    return this.tasks.filter((task) => task.status === 'Completed').length;
+  }
+
+  get pendingTasks(): number {
+    return this.tasks.filter((task) => task.status !== 'Completed').length;
+  }
+
+  get lastActivityTime(): string {
+    const latest = this.items[0]?.createdAt;
+    if (!latest) {
+      return '-';
+    }
+    return this.formatExactTime(latest);
   }
 
   loadFilters(): void {
@@ -85,9 +131,15 @@ export class WorkHistoryComponent implements OnInit {
     this.expandedId = this.expandedId === itemId ? null : itemId;
   }
 
-  getBadgeClass(type: string): string {
-    if (type === 'payment' || type === 'report') return 'success';
-    if (type === 'assignment' || type === 'task') return 'warning';
+  getColorClass(item: WorkHistoryItem): string {
+    if (item.type === 'message') return 'info';
+    if (item.type === 'payment') return 'payment';
+    if (item.type === 'report') return 'report';
+    if (item.type === 'assignment') return 'assignment';
+    if (item.type === 'task') {
+      if (this.lower(item.title).includes('picked')) return 'picked';
+      return 'task';
+    }
     return 'info';
   }
 
@@ -108,6 +160,33 @@ export class WorkHistoryComponent implements OnInit {
     }
   }
 
+  getDisplayTitle(item: WorkHistoryItem): string {
+    const employee = this.getEmployeeLabel(item);
+    const baseTitle = String(item.title || '').trim();
+
+    if (item.type === 'report') {
+      return employee === 'System' ? 'Report submitted' : `Report submitted by ${employee}`;
+    }
+
+    if (item.type === 'assignment') {
+      return employee === 'System' ? 'Task assigned' : `Task assigned to ${employee}`;
+    }
+
+    if (item.type === 'task' && this.lower(baseTitle).includes('picked')) {
+      return employee === 'System' ? 'Task picked' : `Task picked by ${employee}`;
+    }
+
+    if (item.type === 'message') {
+      return 'Message received';
+    }
+
+    if (item.type === 'payment') {
+      return 'Payment updated';
+    }
+
+    return baseTitle || 'Activity updated';
+  }
+
   getEmployeeLabel(item: WorkHistoryItem): string {
     if (item.employeeId && typeof item.employeeId === 'object') {
       return item.employeeId.fullName || item.employeeId.email || 'System';
@@ -122,5 +201,83 @@ export class WorkHistoryComponent implements OnInit {
     }
 
     return Object.entries(meta).map(([key, value]) => ({ key, value: String(value) }));
+  }
+
+  formatRelativeTime(dateValue: string): string {
+    const date = new Date(dateValue);
+    const diffMs = Date.now() - date.getTime();
+    if (Number.isNaN(diffMs)) {
+      return '-';
+    }
+
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+
+    if (diffMs < minute) return 'Just now';
+    if (diffMs < hour) {
+      const mins = Math.max(1, Math.floor(diffMs / minute));
+      return `${mins} min${mins > 1 ? 's' : ''} ago`;
+    }
+    if (diffMs < day) {
+      const hrs = Math.max(1, Math.floor(diffMs / hour));
+      return `${hrs} hour${hrs > 1 ? 's' : ''} ago`;
+    }
+
+    const days = Math.max(1, Math.floor(diffMs / day));
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  }
+
+  formatExactTime(dateValue: string): string {
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) {
+      return '-';
+    }
+
+    return new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date);
+  }
+
+  isLatest(item: WorkHistoryItem): boolean {
+    return Boolean(this.items[0]?._id && this.items[0]._id === item._id);
+  }
+
+  private dayKey(dateValue: string): string {
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) {
+      return '0000-00-00';
+    }
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  private groupLabel(dayKey: string): string {
+    const today = this.dayKey(new Date().toISOString());
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterday = this.dayKey(yesterdayDate.toISOString());
+
+    if (dayKey === today) return 'Today';
+    if (dayKey === yesterday) return 'Yesterday';
+
+    const date = new Date(dayKey);
+    if (Number.isNaN(date.getTime())) {
+      return 'Older';
+    }
+
+    return new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(date);
+  }
+
+  private lower(value: string): string {
+    return String(value || '').toLowerCase();
   }
 }

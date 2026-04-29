@@ -6,21 +6,67 @@
     </div>
   </div>
 
-  <div class="filters">
-    <select [(ngModel)]="selectedClientId" (change)="loadHistory()">
-      <option value="">All Clients</option>
-      <option *ngFor="let client of clients" [value]="client._id">{{ client.name }} ({{ client.mobile }})</option>
-    </select>
+  <section class="summary-grid">
+    <div class="summary-card">
+      <span class="label">Total Tasks</span>
+      <strong>{{ totalTasks }}</strong>
+    </div>
+    <div class="summary-card success">
+      <span class="label">Completed Tasks</span>
+      <strong>{{ completedTasks }}</strong>
+    </div>
+    <div class="summary-card warning">
+      <span class="label">Pending Tasks</span>
+      <strong>{{ pendingTasks }}</strong>
+    </div>
+    <div class="summary-card info">
+      <span class="label">Last Activity</span>
+      <strong>{{ lastActivityTime }}</strong>
+    </div>
+  </section>
 
-    <select [(ngModel)]="selectedTaskId" (change)="loadHistory()">
-      <option value="">All Tasks</option>
-      <option *ngFor="let task of tasks" [value]="task._id">{{ task.title }}</option>
-    </select>
+  <div class="filters-card">
+    <div class="filters">
+      <label>
+        <span>Client</span>
+        <div class="input-wrap">
+          <i class="fa-regular fa-user"></i>
+          <select [(ngModel)]="selectedClientId" (change)="loadHistory()">
+            <option value="">All Clients</option>
+            <option *ngFor="let client of clients" [value]="client._id">{{ client.name }} ({{ client.mobile }})</option>
+          </select>
+        </div>
+      </label>
 
-    <input type="date" [(ngModel)]="fromDate" (change)="loadHistory()">
-    <input type="date" [(ngModel)]="toDate" (change)="loadHistory()">
+      <label>
+        <span>Task</span>
+        <div class="input-wrap">
+          <i class="fa-solid fa-list-check"></i>
+          <select [(ngModel)]="selectedTaskId" (change)="loadHistory()">
+            <option value="">All Tasks</option>
+            <option *ngFor="let task of tasks" [value]="task._id">{{ task.title }}</option>
+          </select>
+        </div>
+      </label>
 
-    <button type="button" class="reset-btn" (click)="resetFilters()">Reset</button>
+      <label>
+        <span>From Date</span>
+        <div class="input-wrap">
+          <i class="fa-regular fa-calendar"></i>
+          <input type="date" [(ngModel)]="fromDate" (change)="loadHistory()">
+        </div>
+      </label>
+
+      <label>
+        <span>To Date</span>
+        <div class="input-wrap">
+          <i class="fa-regular fa-calendar-check"></i>
+          <input type="date" [(ngModel)]="toDate" (change)="loadHistory()">
+        </div>
+      </label>
+
+      <button type="button" class="reset-btn" (click)="resetFilters()">Reset</button>
+    </div>
   </div>
 
   <div class="loading" *ngIf="isLoading">Loading history...</div>
@@ -28,34 +74,26 @@
   <div class="timeline" *ngIf="!isLoading">
     <div class="empty" *ngIf="!items.length">No activity found for selected filters.</div>
 
-    <div class="timeline-item" *ngFor="let item of items">
-      <div class="timeline-icon" [ngClass]="getBadgeClass(item.type)">
-        <i class="fa-solid" [ngClass]="getIconClass(item.type)"></i>
+    <section class="timeline-group" *ngFor="let group of groupedTimeline">
+      <div class="group-label">{{ group.label }}</div>
+      <div class="group-items">
+        <div class="timeline-line"></div>
+
+        <app-timeline-item
+          *ngFor="let item of group.items"
+          [item]="item"
+          [latest]="isLatest(item)"
+          [expanded]="expandedId === item._id"
+          [title]="getDisplayTitle(item)"
+          [employeeLabel]="getEmployeeLabel(item)"
+          [relativeTime]="formatRelativeTime(item.createdAt)"
+          [exactTime]="formatExactTime(item.createdAt)"
+          [iconClass]="getIconClass(item.type)"
+          [colorClass]="getColorClass(item)"
+          [metadata]="asKeyValues(item.metadata)"
+          (toggle)="toggleExpanded(item._id)"
+        ></app-timeline-item>
       </div>
-
-      <div class="timeline-content">
-        <div class="timeline-title-row">
-          <h3>{{ item.title }}</h3>
-          <span class="badge" [ngClass]="getBadgeClass(item.type)">{{ item.type }}</span>
-        </div>
-
-        <p class="desc">{{ item.description || '-' }}</p>
-
-        <div class="meta-row">
-          <span><i class="fa-regular fa-clock"></i> {{ item.createdAt | date:'dd MMM yyyy, hh:mm a' }}</span>
-          <span><i class="fa-regular fa-user"></i> {{ getEmployeeLabel(item) }}</span>
-        </div>
-
-        <button type="button" class="expand-btn" (click)="toggleExpanded(item._id)">
-          {{ expandedId === item._id ? 'Hide Details' : 'Show Details' }}
-        </button>
-
-        <div class="details" *ngIf="expandedId === item._id">
-          <div *ngFor="let pair of asKeyValues(item.metadata)">
-            <strong>{{ pair.key }}:</strong> {{ pair.value }}
-          </div>
-        </div>
-      </div>
-    </div>
+    </section>
   </div>
 </div>

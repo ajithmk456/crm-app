@@ -1,0 +1,32 @@
+<article class="timeline-item" [class.latest]="latest">
+  <div class="line-node" [ngClass]="colorClass">
+    <i class="fa-solid" [ngClass]="iconClass"></i>
+  </div>
+
+  <div class="content-card" [class.latest]="latest">
+    <div class="top-row">
+      <h4>{{ title }}</h4>
+      <span class="latest-badge" *ngIf="latest">Latest</span>
+    </div>
+
+    <p class="desc" *ngIf="item.description">{{ item.description }}</p>
+
+    <div class="meta-row">
+      <span class="meta-item"><i class="fa-regular fa-clock"></i> {{ relativeTime }}</span>
+      <span class="meta-item"><i class="fa-regular fa-calendar"></i> {{ exactTime }}</span>
+      <span class="meta-item"><i class="fa-regular fa-user"></i> {{ employeeLabel }}</span>
+    </div>
+
+    <button type="button" class="details-toggle" *ngIf="hasDetails" (click)="onToggle()">
+      {{ expanded ? 'Hide details' : 'View details' }}
+      <i class="fa-solid" [ngClass]="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+    </button>
+
+    <div class="details" *ngIf="expanded && hasDetails">
+      <div class="detail-row" *ngFor="let pair of metadata">
+        <span class="k">{{ pair.key }}</span>
+        <span class="v">{{ pair.value }}</span>
+      </div>
+    </div>
+  </div>
+</article>
