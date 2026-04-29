@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
@@ -43,6 +43,13 @@ export class ManageEmployeeComponent {
 
   ngOnInit() {
     this.loadEmployees();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey() {
+    if (this.isModalOpen) {
+      this.closeModal();
+    }
   }
 
   loadEmployees() {

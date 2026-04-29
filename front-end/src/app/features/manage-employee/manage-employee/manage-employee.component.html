@@ -71,27 +71,19 @@
   </div>
 
 </div>
-<!-- Add / Edit Employee Modal -->
-<div class="modal-overlay" *ngIf="isModalOpen">
-  <div class="employee-modal">
+<!-- Add / Edit Employee Drawer -->
+<div class="drawer-overlay" *ngIf="isModalOpen" (click)="closeModal()"></div>
+<div class="employee-drawer" *ngIf="isModalOpen" (click)="$event.stopPropagation()">
+  <div class="drawer-header">
+    <h2>
+      <i class="fas" [ngClass]="isEditMode ? 'fa-user-edit' : 'fa-user-plus'"></i>
+      {{ isEditMode ? 'Edit Employee' : 'Add Employee' }}
+    </h2>
+    <button class="drawer-close-btn" (click)="closeModal()" title="Close (ESC)">✕</button>
+  </div>
 
-    <!-- Modal Header -->
-    <div class="modal-header">
-      <h3>
-  <i class="fas" 
-     [ngClass]="isEditMode ? 'fa-user-edit' : 'fa-user-plus'">
-  </i>
-  {{ isEditMode ? 'Edit Employee' : 'Add Employee' }}
-</h3>
-      <button class="close-btn" (click)="closeModal()">
-        <i class="fas fa-times"></i>
-      </button>
-    </div>
-
-    <!-- Modal Body -->
-    <div class="modal-body">
-
-      <form [formGroup]="employeeForm">
+  <div class="drawer-body">
+    <form [formGroup]="employeeForm">
       <div class="form-group">
         <label>Full Name</label>
         <div class="input-with-icon">
@@ -115,13 +107,14 @@
           <input type="text" placeholder="Enter phone number" formControlName="phone" />
         </div>
       </div>
-<div class="form-group">
-  <label>Address</label>
-  <div class="input-with-icon">
-    <i class="fas fa-map-marker-alt"></i>
-    <textarea placeholder="Enter address" formControlName="address"></textarea>
-  </div>
-</div>
+
+      <div class="form-group">
+        <label>Address</label>
+        <div class="input-with-icon">
+          <i class="fas fa-map-marker-alt"></i>
+          <textarea placeholder="Enter address" formControlName="address"></textarea>
+        </div>
+      </div>
 
       <div class="form-group">
         <label>Role</label>
@@ -141,18 +134,14 @@
           <span class="slider"></span>
         </label>
       </div>
-      </form>
+    </form>
+  </div>
 
-    </div>
-
-    <!-- Modal Footer -->
-    <div class="modal-footer">
-      <button class="btn-cancel" (click)="closeModal()">Cancel</button>
-      <button class="btn-save" (click)="saveEmployee()" [disabled]="isSaving">
-        <i class="fas fa-save"></i> {{ isEditMode ? 'Update Employee' : 'Save Employee' }}
-      </button>
-    </div>
-
+  <div class="drawer-footer">
+    <button class="btn-cancel" (click)="closeModal()">Cancel</button>
+    <button class="btn-save" (click)="saveEmployee()" [disabled]="isSaving">
+      <i class="fas fa-save"></i> {{ isEditMode ? 'Update Employee' : 'Save Employee' }}
+    </button>
   </div>
 </div>
 <!-- Delete Confirmation Modal -->
