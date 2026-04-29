@@ -100,6 +100,20 @@ export class ManageTaskComponent {
     });
   }
 
+  private resolveDefaultAssigneeId(): string {
+    if (!this.isAdmin || !this.employees.length) {
+      return '';
+    }
+
+    const currentEmail = String(this.currentUser?.email || '').toLowerCase();
+    const matchedSelf = this.employees.find((emp) => String(emp.email || '').toLowerCase() === currentEmail);
+    if (matchedSelf?._id) {
+      return matchedSelf._id;
+    }
+
+    return this.employees[0]?._id || '';
+  }
+
   private applyTaskPrefillFromNavigationState(): void {
     const prefill = window.history.state?.taskPrefill;
     if (!prefill || typeof prefill !== 'object') {
@@ -120,6 +134,13 @@ export class ManageTaskComponent {
       next: (res) => {
         if (res.success && Array.isArray(res.data)) {
           this.employees = res.data;
+
+          if (this.isTaskModalOpen && this.isAdmin && !this.taskForm.get('assignedTo')?.value) {
+            const defaultAssignee = this.resolveDefaultAssigneeId();
+            if (defaultAssignee) {
+              this.taskForm.patchValue({ assignedTo: defaultAssignee });
+            }
+          }
         }
       },
       error: () => {
@@ -207,12 +228,14 @@ export class ManageTaskComponent {
   }
 
   openAddTask() {
+    const defaultAssignee = this.resolveDefaultAssigneeId();
+
     this.isEditMode = false;
     this.editingTaskId = null;
     this.taskForm.reset({
       title: '',
       description: '',
-      assignedTo: '',
+      assignedTo: defaultAssignee,
       customerName: '',
       customerPhone: '',
       paymentReceived: false,
@@ -255,6 +278,11 @@ export class ManageTaskComponent {
 
     if (!formValue.title?.trim()) {
       this.showMessage('Task title is required', 'error');
+      return;
+    }
+
+    if (!String(formValue.assignedTo || '').trim()) {
+      this.showMessage('Please select an employee for this task', 'error');
       return;
     }
 
