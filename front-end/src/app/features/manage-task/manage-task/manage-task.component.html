@@ -113,18 +113,15 @@
 
 </div>
 
-<!-- Task Modal -->
-<div class="modal-overlay" *ngIf="isTaskModalOpen" (click)="closeTaskModal()">
-  <div class="employee-modal" (click)="$event.stopPropagation()">
+<!-- Task Drawer -->
+<div class="drawer-overlay" *ngIf="isTaskModalOpen" (click)="closeTaskModal()"></div>
+<div class="task-drawer" *ngIf="isTaskModalOpen" (click)="$event.stopPropagation()">
+  <div class="drawer-header">
+    <h2>{{ isEditMode ? 'Edit Task' : 'Add Task' }}</h2>
+    <button class="drawer-close-btn" (click)="closeTaskModal()" title="Close (ESC)">✕</button>
+  </div>
 
-    <div class="modal-header">
-      <h3>
-        {{ isEditMode ? 'Edit Task' : 'Add Task' }}
-      </h3>
-      <button class="close-btn" (click)="closeTaskModal()">X</button>
-    </div>
-
-    <div class="modal-body" [formGroup]="taskForm">
+  <div class="drawer-body" [formGroup]="taskForm">
 
       <div class="form-group">
         <label>Task Title</label>
@@ -219,15 +216,13 @@
         </select>
       </div>
 
-    </div>
+  </div>
 
-    <div class="modal-footer">
-      <button class="btn-cancel" (click)="closeTaskModal()">Cancel</button>
-      <button class="btn-save" (click)="saveTask()" [disabled]="loadingSave">
-        {{ isEditMode ? 'Update Task' : 'Save Task' }}
-      </button>
-    </div>
-
+  <div class="drawer-footer">
+    <button class="btn-cancel" (click)="closeTaskModal()">Cancel</button>
+    <button class="btn-save" (click)="saveTask()" [disabled]="loadingSave">
+      {{ isEditMode ? 'Update Task' : 'Save Task' }}
+    </button>
   </div>
 </div>
 

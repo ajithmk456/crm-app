@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -74,6 +74,13 @@ export class ManageTaskComponent {
       reminderEnabled: [false],
       reminderBefore: [10]
     });
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey() {
+    if (this.isTaskModalOpen) {
+      this.closeTaskModal();
+    }
   }
 
   ngOnInit() {
