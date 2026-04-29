@@ -52,6 +52,12 @@
         <p>Add, edit, and manage client contacts</p>
       </div>
 
+      <div class="card" *ngIf="isAdmin" (click)="nav('work-history')">
+        <div class="icon icon-history"><i class="fa-solid fa-timeline"></i></div>
+        <h3>Work History</h3>
+        <p>Track chronological client and task activities</p>
+      </div>
+
       <div class="card" *ngIf="showMyTask" (click)="goToMyTask()">
         <div class="icon icon-my-task"><i class="fa-solid fa-list-check"></i></div>
         <h3>My Task</h3>

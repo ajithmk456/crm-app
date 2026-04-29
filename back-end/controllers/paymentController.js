@@ -1,6 +1,7 @@
 const Payment = require('../models/Payment');
 const Task = require('../models/Task');
 const Employee = require('../models/Employee');
+const { logActivity, resolveClientIdByPhone } = require('../services/activityHistoryService');
 
 const resolveAssignedIdsForUser = async (user) => {
   const ids = [String(user._id)];
@@ -44,6 +45,30 @@ exports.addPayment = async (req, res, next) => {
       paymentMode,
       notes: notes || '',
     });
+
+    try {
+      const fullTask = await Task.findById(taskId).select('_id title customerPhone assignedTo adminOwner');
+      const resolvedClientId = await resolveClientIdByPhone(fullTask?.customerPhone || '');
+
+      await logActivity({
+        type: 'payment',
+        title: 'Payment Updated',
+        referenceId: String(payment._id),
+        taskId: fullTask?._id,
+        clientId: resolvedClientId,
+        employeeId: fullTask?.assignedTo || null,
+        description: `Payment of ${amount} added (${paymentMode})`,
+        metadata: {
+          amount,
+          paymentMode,
+          paymentDate: payment.paymentDate,
+          notes: notes || '',
+        },
+        adminOwner: fullTask?.adminOwner,
+      });
+    } catch (_) {
+      // Keep payment creation resilient if history logging fails.
+    }
 
     res.status(201).json({ success: true, data: payment });
   } catch (error) {

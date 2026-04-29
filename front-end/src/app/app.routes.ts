@@ -14,6 +14,7 @@ import { ContactUsComponent } from './features/contact-us/contact-us.component';
 import { ManageReportComponent } from './features/manage-report/manage-report.component';
 import { SuperadminCreateAdminComponent } from './features/superadmin-create-admin/superadmin-create-admin.component';
 import { ManageClientComponent } from './features/manage-client/manage-client/manage-client.component';
+import { WorkHistoryComponent } from './features/work-history/work-history.component';
 import { AuthGuard } from './core/auth.guard';
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -64,6 +65,12 @@ export const routes: Routes = [
         component: ManageClientComponent,
         canActivate: [AuthGuard],
         data: { role: 'admin', breadcrumb: 'Manage Clients' }
+      },
+      {
+        path: 'work-history',
+        component: WorkHistoryComponent,
+        canActivate: [AuthGuard],
+        data: { role: 'admin', breadcrumb: 'Work History' }
       }
     ]
   }

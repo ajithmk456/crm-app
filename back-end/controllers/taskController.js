@@ -4,6 +4,7 @@ const Enquiry = require('../models/Enquiry');
 const User = require('../models/User');
 const { scheduleTaskReminder, rescheduleTaskReminder, sendManualReminder } = require('../services/reminderService');
 const ReminderLog = require('../models/ReminderLog');
+const { logActivity, resolveClientIdByPhone } = require('../services/activityHistoryService');
 
 const isAdminUser = (user) => String(user?.role || '').toLowerCase() === 'admin';
 
@@ -119,6 +120,41 @@ exports.createTask = async (req, res, next) => {
     });
 
     const populated = await Task.findById(task._id).populate('assignedTo', 'fullName email phone');
+
+    try {
+      const resolvedClientId = await resolveClientIdByPhone(task.customerPhone || '');
+
+      await logActivity({
+        type: 'task',
+        title: 'Task Created',
+        referenceId: String(task._id),
+        taskId: task._id,
+        clientId: resolvedClientId,
+        employeeId: task.assignedTo,
+        description: task.title,
+        metadata: {
+          status: task.status,
+          priority: task.priority,
+        },
+        adminOwner: task.adminOwner,
+      });
+
+      await logActivity({
+        type: 'assignment',
+        title: 'Task Assigned',
+        referenceId: String(task._id),
+        taskId: task._id,
+        clientId: resolvedClientId,
+        employeeId: task.assignedTo,
+        description: `Task assigned: ${task.title}`,
+        metadata: {
+          assignedTo: String(task.assignedTo || ''),
+        },
+        adminOwner: task.adminOwner,
+      });
+    } catch (_) {
+      // Keep task creation resilient if history logging fails.
+    }
     
     if (task.reminderEnabled && task.dueDate) {
       await scheduleTaskReminder(task);
@@ -320,9 +356,49 @@ exports.updateTask = async (req, res, next) => {
       }
       await task.save();
       const updated = await Task.findById(task._id).populate('assignedTo', 'fullName email phone');
+
+      try {
+        const resolvedClientId = await resolveClientIdByPhone(task.customerPhone || '');
+
+        if (String(task.status || '') === 'In Progress') {
+          await logActivity({
+            type: 'task',
+            title: 'Task Picked',
+            referenceId: String(task._id),
+            taskId: task._id,
+            clientId: resolvedClientId,
+            employeeId: task.assignedTo,
+            description: `Task started: ${task.title}`,
+            metadata: { status: task.status },
+            adminOwner: task.adminOwner,
+          });
+        }
+
+        if (String(task.status || '') === 'Report Sent' || !!task.reportSent) {
+          await logActivity({
+            type: 'report',
+            title: 'Report Submitted',
+            referenceId: String(task._id),
+            taskId: task._id,
+            clientId: resolvedClientId,
+            employeeId: task.assignedTo,
+            description: `Report submitted for task: ${task.title}`,
+            metadata: {
+              status: task.status,
+              reportSent: !!task.reportSent,
+            },
+            adminOwner: task.adminOwner,
+          });
+        }
+      } catch (_) {
+        // Keep employee update flow resilient if history logging fails.
+      }
+
       return res.status(200).json({ success: true, data: updated });
     }
     
+    const previousAssignedTo = String(task.assignedTo || '');
+    const previousStatus = String(task.status || '');
     const dueDateChanged = dueDate && task.dueDate?.getTime() !== new Date(dueDate).getTime();
     const reminderChanged = reminderEnabled !== undefined || reminderBefore !== undefined;
 
@@ -347,6 +423,66 @@ exports.updateTask = async (req, res, next) => {
 
     await task.save();
     const updated = await Task.findById(task._id).populate('assignedTo', 'fullName email phone');
+
+    try {
+      const nextAssignedTo = String(task.assignedTo || '');
+      const nextStatus = String(task.status || '');
+      const resolvedClientId = await resolveClientIdByPhone(task.customerPhone || '');
+
+      if (previousAssignedTo !== nextAssignedTo) {
+        await logActivity({
+          type: 'assignment',
+          title: 'Task Assigned',
+          referenceId: String(task._id),
+          taskId: task._id,
+          clientId: resolvedClientId,
+          employeeId: task.assignedTo,
+          description: `Task reassigned: ${task.title}`,
+          metadata: {
+            previousAssignedTo,
+            nextAssignedTo,
+          },
+          adminOwner: task.adminOwner,
+        });
+      }
+
+      if (previousStatus !== 'In Progress' && nextStatus === 'In Progress') {
+        await logActivity({
+          type: 'task',
+          title: 'Task Picked',
+          referenceId: String(task._id),
+          taskId: task._id,
+          clientId: resolvedClientId,
+          employeeId: task.assignedTo,
+          description: `Task started: ${task.title}`,
+          metadata: { previousStatus, nextStatus },
+          adminOwner: task.adminOwner,
+        });
+      }
+
+      const reportJustSubmitted =
+        (previousStatus !== 'Report Sent' && nextStatus === 'Report Sent')
+        || (reportSent !== undefined && !!reportSent);
+
+      if (reportJustSubmitted) {
+        await logActivity({
+          type: 'report',
+          title: 'Report Submitted',
+          referenceId: String(task._id),
+          taskId: task._id,
+          clientId: resolvedClientId,
+          employeeId: task.assignedTo,
+          description: `Report submitted for task: ${task.title}`,
+          metadata: {
+            status: nextStatus,
+            reportSent: !!task.reportSent,
+          },
+          adminOwner: task.adminOwner,
+        });
+      }
+    } catch (_) {
+      // Keep task update resilient if history logging fails.
+    }
 
     if ((dueDateChanged || reminderChanged) && task.reminderEnabled) {
       await rescheduleTaskReminder(updated);
@@ -435,6 +571,27 @@ exports.addTaskAttachment = async (req, res, next) => {
 
     await task.save();
     const updatedTask = await Task.findById(task._id).populate('assignedTo', 'fullName email phone');
+
+    try {
+      await logActivity({
+        type: 'report',
+        title: 'Report Submitted',
+        referenceId: String(task._id),
+        taskId: task._id,
+        clientId: task.customerPhone ? await resolveClientIdByPhone(task.customerPhone) : null,
+        employeeId: task.assignedTo,
+        description: `Proof attached: ${fileName}`,
+        metadata: {
+          attachmentUrl: url,
+          mimeType: mimeType || '',
+          note: note || '',
+        },
+        adminOwner: task.adminOwner,
+      });
+    } catch (_) {
+      // Keep attachment flow resilient if history logging fails.
+    }
+
     return res.status(200).json({ success: true, data: updatedTask });
   } catch (error) {
     next(error);

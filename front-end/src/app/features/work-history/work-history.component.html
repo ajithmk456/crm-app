@@ -1,0 +1,61 @@
+<div class="history-page">
+  <div class="history-header">
+    <div>
+      <h2>Work History</h2>
+      <p>Chronological activity timeline for client and task events.</p>
+    </div>
+  </div>
+
+  <div class="filters">
+    <select [(ngModel)]="selectedClientId" (change)="loadHistory()">
+      <option value="">All Clients</option>
+      <option *ngFor="let client of clients" [value]="client._id">{{ client.name }} ({{ client.mobile }})</option>
+    </select>
+
+    <select [(ngModel)]="selectedTaskId" (change)="loadHistory()">
+      <option value="">All Tasks</option>
+      <option *ngFor="let task of tasks" [value]="task._id">{{ task.title }}</option>
+    </select>
+
+    <input type="date" [(ngModel)]="fromDate" (change)="loadHistory()">
+    <input type="date" [(ngModel)]="toDate" (change)="loadHistory()">
+
+    <button type="button" class="reset-btn" (click)="resetFilters()">Reset</button>
+  </div>
+
+  <div class="loading" *ngIf="isLoading">Loading history...</div>
+
+  <div class="timeline" *ngIf="!isLoading">
+    <div class="empty" *ngIf="!items.length">No activity found for selected filters.</div>
+
+    <div class="timeline-item" *ngFor="let item of items">
+      <div class="timeline-icon" [ngClass]="getBadgeClass(item.type)">
+        <i class="fa-solid" [ngClass]="getIconClass(item.type)"></i>
+      </div>
+
+      <div class="timeline-content">
+        <div class="timeline-title-row">
+          <h3>{{ item.title }}</h3>
+          <span class="badge" [ngClass]="getBadgeClass(item.type)">{{ item.type }}</span>
+        </div>
+
+        <p class="desc">{{ item.description || '-' }}</p>
+
+        <div class="meta-row">
+          <span><i class="fa-regular fa-clock"></i> {{ item.createdAt | date:'dd MMM yyyy, hh:mm a' }}</span>
+          <span><i class="fa-regular fa-user"></i> {{ getEmployeeLabel(item) }}</span>
+        </div>
+
+        <button type="button" class="expand-btn" (click)="toggleExpanded(item._id)">
+          {{ expandedId === item._id ? 'Hide Details' : 'Show Details' }}
+        </button>
+
+        <div class="details" *ngIf="expandedId === item._id">
+          <div *ngFor="let pair of asKeyValues(item.metadata)">
+            <strong>{{ pair.key }}:</strong> {{ pair.value }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

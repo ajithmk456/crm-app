@@ -11,6 +11,7 @@ const {
   normalizeStatus,
 } = require('../services/chatMessageStore');
 const { emitChatUpdate } = require('../services/socketService');
+const { logActivity, resolveClientIdByPhone } = require('../services/activityHistoryService');
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -415,12 +416,36 @@ exports.processGupshupWebhook = async (body) => {
     });
 
     // Auto-create client record for unknown inbound senders
+    let resolvedClientId = null;
     if (!isFromBusiness && phone) {
       try {
         const { findOrCreateClientByMobile } = require('./clientController');
-        await findOrCreateClientByMobile(phone);
+        const client = await findOrCreateClientByMobile(phone);
+        resolvedClientId = client?._id || null;
       } catch (_) {
         // Non-critical – never block message save
+      }
+    }
+
+    if (!isFromBusiness) {
+      try {
+        if (!resolvedClientId && phone) {
+          resolvedClientId = await resolveClientIdByPhone(phone);
+        }
+
+        await logActivity({
+          type: 'message',
+          title: 'Message Received',
+          referenceId: saved.messageId,
+          clientId: resolvedClientId,
+          description: String(displayText || 'Incoming message received.').slice(0, 300),
+          metadata: {
+            phone,
+            messageType: saved.type || 'text',
+          },
+        });
+      } catch (_) {
+        // Keep webhook processing resilient even if history logging fails.
       }
     }
 

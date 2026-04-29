@@ -1,0 +1,174 @@
+@import '../../shared/styles/variables';
+
+.history-page {
+  padding: 16px;
+}
+
+.history-header {
+  h2 {
+    margin: 0;
+    color: #0f172a;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
+  }
+}
+
+.filters {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1.4fr 1.4fr 1fr 1fr auto;
+  gap: 10px;
+
+  select,
+  input {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 13px;
+    background: #fff;
+  }
+}
+
+.reset-btn {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.loading,
+.empty {
+  margin-top: 16px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.timeline {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 10px;
+}
+
+.timeline-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.timeline-content {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.timeline-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+
+  h3 {
+    margin: 0;
+    font-size: 15px;
+    color: #0f172a;
+  }
+}
+
+.badge {
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.info {
+  background: #2563eb;
+}
+
+.warning {
+  background: #d97706;
+}
+
+.success {
+  background: #16a34a;
+}
+
+.badge.info {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.badge.warning {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.badge.success {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.desc {
+  margin: 6px 0;
+  color: #334155;
+  font-size: 13px;
+}
+
+.meta-row {
+  display: flex;
+  gap: 16px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.expand-btn {
+  margin-top: 8px;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.details {
+  margin-top: 8px;
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 8px;
+  font-size: 12px;
+  color: #334155;
+
+  div {
+    margin-bottom: 4px;
+  }
+}
+
+@media (max-width: 900px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .meta-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+}

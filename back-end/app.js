@@ -21,6 +21,7 @@ const contactRoutes = require('./routes/contactRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const clientRoutes = require('./routes/clientRoutes');
+const historyRoutes = require('./routes/historyRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -75,6 +76,7 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/api/history', historyRoutes);
 app.use('/webhook', webhookRoutes);
 app.use(errorHandler);
 
