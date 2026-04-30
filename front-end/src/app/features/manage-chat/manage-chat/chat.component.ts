@@ -71,6 +71,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   activeFileViewer: ActiveFileViewer | null = null;
   activeFileViewerResourceUrl: SafeResourceUrl | null = null;
   isPdfViewerLoading = false;
+  pdfViewerError = '';
+  private activePdfBlobUrl: string | null = null;
   isViewerDownloadInProgress = false;
   showAttachmentMenu = false;
   showEmojiPicker = false;
@@ -304,6 +306,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     this.resetAttachmentDraftState();
     this.activeFileViewer = null;
     this.activeFileViewerResourceUrl = null;
+    this.revokePdfBlobUrl();
     this.optimisticImagePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
     this.optimisticImagePreviewUrls.clear();
     this.brokenInlineImageMessageIds.clear();
@@ -890,24 +893,16 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     const isImage = this.isImageFileMessage(message);
     const isPdf = this.isPdfFileMessage(message);
 
-    // PDFs from external sources (e.g. Gupshup) can't be embedded via Google Docs viewer
-    // because those URLs redirect to signed download links. Open directly in a new tab
-    // where the browser's native PDF viewer handles it reliably.
     if (isPdf) {
       window.open(fileUrl, '_blank', 'noopener');
       return;
     }
 
-    this.activeFileViewer = {
-      url: fileUrl,
-      name,
-      mimeType,
-      isImage,
-      isPdf,
-    };
-
-    this.isPdfViewerLoading = false;
+    this.revokePdfBlobUrl();
+    this.activeFileViewer = { url: fileUrl, name, mimeType, isImage, isPdf };
     this.activeFileViewerResourceUrl = null;
+    this.pdfViewerError = '';
+    this.isPdfViewerLoading = false;
   }
 
   onPdfViewerLoad(): void {
@@ -918,7 +913,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     this.activeFileViewer = null;
     this.activeFileViewerResourceUrl = null;
     this.isPdfViewerLoading = false;
+    this.pdfViewerError = '';
     this.isViewerDownloadInProgress = false;
+    this.revokePdfBlobUrl();
   }
 
   async downloadFileMessage(message: PendingMessage): Promise<void> {
@@ -1078,9 +1075,11 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  private buildPdfEmbedUrl(fileUrl: string): string {
-    const normalizedUrl = this.normalizeFileUrl(fileUrl);
-    return `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(normalizedUrl)}`;
+  private revokePdfBlobUrl(): void {
+    if (this.activePdfBlobUrl) {
+      URL.revokeObjectURL(this.activePdfBlobUrl);
+      this.activePdfBlobUrl = null;
+    }
   }
 
   private buildTaskTitleFromMessage(messageText: string): string {
