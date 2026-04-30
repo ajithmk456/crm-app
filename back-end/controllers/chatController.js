@@ -468,6 +468,9 @@ exports.processGupshupWebhook = async (body) => {
   ).toLowerCase();
   const resolvedMimeType = attachmentMimeType || (messageType === 'image' ? 'image/jpeg' : '');
   const isKnownMediaType = mediaPayloadTypes.has(messageType);
+  const hasAttachmentPayload = Boolean(isKnownMediaType || attachmentUrl);
+  const persistedFilename = hasAttachmentPayload ? attachmentFilename : '';
+  const persistedMimeType = hasAttachmentPayload ? resolvedMimeType : '';
   const displayText = text || attachmentFilename || (isMediaType ? normalizedPayloadType : '');
   const reason = payload.reason || nestedPayload.reason || '';
   const eventTimestamp = payload.timestamp || nestedPayload.timestamp || new Date();
@@ -524,8 +527,8 @@ exports.processGupshupWebhook = async (body) => {
       text: displayText,
       type: isKnownMediaType || attachmentUrl ? 'file' : 'text',
       fileUrl: persistedAttachmentUrl,
-      filename: attachmentFilename,
-      mimeType: resolvedMimeType,
+      filename: persistedFilename,
+      mimeType: persistedMimeType,
       direction: isFromBusiness ? 'out' : 'in',
       status: 'sent',
       timestamp: eventTimestamp,

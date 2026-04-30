@@ -772,7 +772,19 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   isFileMessage(message: PendingMessage): boolean {
-    return Boolean(message.fileUrl || message.filename);
+    const fileUrl = String(message.fileUrl || '').trim();
+    const fileName = String(message.filename || '').trim().toLowerCase();
+    const mimeType = String(message.mimeType || '').trim().toLowerCase();
+
+    if (fileUrl) {
+      return true;
+    }
+
+    if (mimeType.startsWith('image/') || mimeType.includes('pdf') || mimeType.includes('document') || mimeType.includes('sheet') || mimeType.includes('msword')) {
+      return true;
+    }
+
+    return /\.(png|jpe?g|gif|webp|pdf|docx?|xlsx?|xls|txt)(\?|$)/i.test(fileName);
   }
 
   isImageFileMessage(message: PendingMessage): boolean {
