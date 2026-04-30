@@ -315,16 +315,29 @@
               >
                 <i class="fa-regular fa-face-smile"></i>
               </button>
-              <button
-                type="button"
-                class="tool-button attach-button-inline"
-                [class.active]="showAttachmentMenu"
-                [disabled]="isSending || isUploadingAttachment"
-                (click)="toggleAttachmentMenu()"
-                aria-label="Attach file"
-              >
-                <i class="fa-solid fa-paperclip"></i>
-              </button>
+              <div class="attachment-anchor">
+                <button
+                  type="button"
+                  class="tool-button attach-button-inline"
+                  [class.active]="showAttachmentMenu"
+                  [disabled]="isSending || isUploadingAttachment"
+                  (click)="toggleAttachmentMenu()"
+                  aria-label="Attach file"
+                >
+                  <i class="fa-solid fa-paperclip"></i>
+                </button>
+
+                <div class="attachment-menu" *ngIf="showAttachmentMenu && !hasAttachmentDrafts">
+                  <button type="button" class="attachment-option" (click)="openAttachmentType('image')">
+                    <i class="fa-regular fa-image"></i>
+                    <span>Image</span>
+                  </button>
+                  <button type="button" class="attachment-option" (click)="openAttachmentType('document')">
+                    <i class="fa-regular fa-file-lines"></i>
+                    <span>Document</span>
+                  </button>
+                </div>
+              </div>
             </div>
             <textarea
               [(ngModel)]="draftMessage"
@@ -349,17 +362,6 @@
               (click)="insertEmoji(emoji)"
             >
               {{ emoji }}
-            </button>
-          </div>
-
-          <div class="attachment-menu" *ngIf="showAttachmentMenu && !hasAttachmentDrafts">
-            <button type="button" class="attachment-option" (click)="openAttachmentType('image')">
-              <i class="fa-regular fa-image"></i>
-              <span>Image</span>
-            </button>
-            <button type="button" class="attachment-option" (click)="openAttachmentType('document')">
-              <i class="fa-regular fa-file-lines"></i>
-              <span>Document</span>
             </button>
           </div>
         </div>

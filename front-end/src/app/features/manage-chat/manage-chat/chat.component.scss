@@ -1256,6 +1256,12 @@
   flex-shrink: 0;
 }
 
+.attachment-anchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .tool-button {
   width: 26px;
   height: 26px;
@@ -1287,14 +1293,17 @@
 
 .emoji-picker,
 .attachment-menu {
-  position: absolute;
-  left: 10px;
-  bottom: calc(100% + 8px);
   background: #ffffff;
   border: 1px solid #d8dee6;
   border-radius: 12px;
   box-shadow: 0 18px 38px rgba(15, 23, 42, 0.16);
   z-index: 5;
+}
+
+.emoji-picker {
+  position: absolute;
+  left: 10px;
+  bottom: calc(100% + 8px);
 }
 
 .emoji-picker {
@@ -1320,11 +1329,28 @@
 }
 
 .attachment-menu {
-  min-width: 170px;
-  padding: 8px;
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  min-width: 154px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -6px;
+    width: 10px;
+    height: 10px;
+    transform: translateX(-50%) rotate(45deg);
+    background: #ffffff;
+    border-right: 1px solid #d8dee6;
+    border-bottom: 1px solid #d8dee6;
+  }
 }
 
 .attachment-option {
@@ -1333,14 +1359,28 @@
   text-align: left;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 7px 9px;
   color: #1f2937;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
 
+  i {
+    width: 14px;
+    text-align: center;
+    color: #64748b;
+    font-size: 13px;
+  }
+
   &:hover {
-    background: #f8fafc;
+    background: #e8f7f3;
+    color: #0f766e;
+
+    i {
+      color: #0f766e;
+    }
   }
 }
 
@@ -1657,6 +1697,30 @@
     height: 38px;
     padding: 0 11px;
     min-width: 62px;
+  }
+
+  .attachment-menu {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    transform: none;
+    min-width: 0;
+    border-radius: 14px;
+    padding: 8px;
+    gap: 4px;
+    box-shadow: 0 18px 46px rgba(15, 23, 42, 0.24);
+
+    &::after {
+      display: none;
+    }
+  }
+
+  .attachment-option {
+    min-height: 40px;
+    border-radius: 10px;
+    padding: 9px 10px;
+    font-size: 14px;
   }
 
   .message-stream {

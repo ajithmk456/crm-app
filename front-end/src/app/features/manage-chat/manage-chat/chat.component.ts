@@ -1179,9 +1179,17 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     return true;
   }
 
-  @HostListener('document:click')
-  onDocumentClick(): void {
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
     this.activeMessageMenuId = null;
+
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('.composer-input')) {
+      return;
+    }
+
+    this.showAttachmentMenu = false;
+    this.showEmojiPicker = false;
   }
 
   private startMessagePolling(): void {
