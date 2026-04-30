@@ -111,9 +111,10 @@ export interface RealtimeChatEvent {
 export class ChatService {
   private readonly socket: Socket;
   private readonly apiBaseUrl = String(environment.apiBaseUrl || '').replace(/\/$/, '');
+  private readonly socketBaseUrl = this.apiBaseUrl || window.location.origin;
 
   constructor(private readonly http: HttpClient) {
-    this.socket = io('/', {
+    this.socket = io(this.socketBaseUrl, {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       autoConnect: true,

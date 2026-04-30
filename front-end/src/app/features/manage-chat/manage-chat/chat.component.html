@@ -1,4 +1,4 @@
-<div class="chat-shell">
+<div class="chat-shell" [class.mobile-chat-open]="selectedConversation">
   <aside class="conversation-panel">
     <div class="panel-header">
       <label class="search-box" aria-label="Search conversations">
@@ -72,6 +72,9 @@
     <ng-container *ngIf="selectedConversation; else emptyState">
       <header class="chat-header">
         <div class="chat-user">
+          <button type="button" class="mobile-back-button" (click)="selectedConversation = null" aria-label="Back to chats">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
           <div class="avatar large">{{ selectedConversation.phoneNumber.slice(-2) }}</div>
           <div>
             <div class="chat-title-row">

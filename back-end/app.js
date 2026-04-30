@@ -28,7 +28,24 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors({ origin: '*' }));
+const allowedOrigins = [
+  'https://crm.mukundhaassociates.com',
+  'http://localhost:4200',
+  'http://localhost:3000',
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true); // allow all for now, tighten later
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
+app.options('*', cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));

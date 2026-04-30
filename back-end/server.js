@@ -23,7 +23,12 @@ const startServer = async () => {
     server = http.createServer(app);
     const io = new Server(server, {
       cors: {
-        origin: '*',
+        origin: [
+          'https://crm.mukundhaassociates.com',
+          'http://localhost:4200',
+        ],
+        methods: ['GET', 'POST'],
+        credentials: true,
       },
     });
 
