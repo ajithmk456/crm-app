@@ -890,6 +890,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     const isImage = this.isImageFileMessage(message);
     const isPdf = this.isPdfFileMessage(message);
 
+    // PDFs from external sources (e.g. Gupshup) can't be embedded via Google Docs viewer
+    // because those URLs redirect to signed download links. Open directly in a new tab
+    // where the browser's native PDF viewer handles it reliably.
+    if (isPdf) {
+      window.open(fileUrl, '_blank', 'noopener');
+      return;
+    }
+
     this.activeFileViewer = {
       url: fileUrl,
       name,
@@ -898,10 +906,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       isPdf,
     };
 
-    this.isPdfViewerLoading = isPdf;
-    this.activeFileViewerResourceUrl = isPdf
-      ? this.sanitizer.bypassSecurityTrustResourceUrl(this.buildPdfEmbedUrl(fileUrl))
-      : null;
+    this.isPdfViewerLoading = false;
+    this.activeFileViewerResourceUrl = null;
   }
 
   onPdfViewerLoad(): void {
