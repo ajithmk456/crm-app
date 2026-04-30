@@ -8,6 +8,23 @@
   padding: 12px;
 }
 
+/* Mobile scroll fix */
+@media (max-width: 768px) {
+  :host {
+    overflow-y: auto;
+  }
+  .profile-page {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+    align-items: flex-start;
+  }
+  .profile-card {
+    height: auto;
+    max-height: none;
+  }
+}
+
 /* ===== Card ===== */
 .profile-card {
   width: 100%;

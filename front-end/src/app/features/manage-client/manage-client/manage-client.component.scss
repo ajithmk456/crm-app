@@ -565,3 +565,16 @@ table {
   .form-row { grid-template-columns: 1fr; }
   .client-modal, .bulk-modal { width: 100%; max-width: 100%; }
 }
+
+/* Mobile scroll fix */
+@media (max-width: 768px) {
+  :host {
+    overflow-y: auto;
+  }
+  .client-container {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+}
+

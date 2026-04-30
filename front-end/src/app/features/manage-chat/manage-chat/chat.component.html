@@ -1,21 +1,19 @@
 <div class="chat-shell">
   <aside class="conversation-panel">
     <div class="panel-header">
-      <div>
-        <p class="eyebrow">WhatsApp</p>
-        <h2>WhatsApp Inbox</h2>
-      </div>
+      <label class="search-box" aria-label="Search conversations">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input
+          type="text"
+          [(ngModel)]="searchTerm"
+          placeholder="Search phone number or message"
+        >
+      </label>
       <span class="conversation-count">{{ conversations.length }}</span>
+      <button class="fullscreen-btn" type="button" (click)="toggleFullscreen()" [title]="isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'">
+        <i [class]="isFullscreen ? 'fa-solid fa-compress' : 'fa-solid fa-expand'"></i>
+      </button>
     </div>
-
-    <label class="search-box" aria-label="Search conversations">
-      <i class="fa-solid fa-magnifying-glass"></i>
-      <input
-        type="text"
-        [(ngModel)]="searchTerm"
-        placeholder="Search phone number or message"
-      >
-    </label>
 
     <div class="conversation-filters">
       <button
@@ -174,10 +172,13 @@
 
         <div
           class="message-row"
-          *ngFor="let message of messages; trackBy: trackMessage"
+          *ngFor="let message of messages; let i = index; trackBy: trackMessage"
           [class.outgoing]="message.direction === 'outgoing'"
           [class.image-row]="isImageFileMessage(message)"
         >
+          <div class="date-separator" *ngIf="shouldShowDateSeparator(i)">
+            <span>{{ getDateSeparatorLabel(message.timestamp) }}</span>
+          </div>
           <article class="bubble" [class.pending]="message.isPending">
             <div class="message-actions">
               <button
@@ -201,29 +202,38 @@
             </div>
             <ng-container *ngIf="isFileMessage(message); else textMessageTpl">
               <div class="file-message-card">
-                <button
-                  type="button"
-                  *ngIf="isImageFileMessage(message) && message.fileUrl"
-                  class="image-preview-link"
-                  (click)="openFileViewer(message)"
-                  aria-label="Open image preview"
-                >
-                  <img class="image-preview" [src]="message.fileUrl" [alt]="message.filename || 'Image attachment'">
-                </button>
-                <p class="image-caption" *ngIf="isImageFileMessage(message) && message.text && message.text !== message.filename && message.text !== 'image' && message.text !== 'Attachment'">
+                <ng-container *ngIf="shouldRenderImagePreview(message)">
+                  <div class="image-loading-skeleton" *ngIf="!isInlineImageLoaded(message)">
+                    <span class="image-loading-spinner"></span>
+                  </div>
+                  <button
+                    type="button"
+                    class="image-preview-link"
+                    [class.image-hidden]="!isInlineImageLoaded(message)"
+                    (click)="openFileViewer(message)"
+                    aria-label="Open image preview"
+                  >
+                    <img
+                      class="image-preview"
+                      [src]="message.fileUrl"
+                      [alt]="message.filename || 'Image attachment'"
+                      (load)="onInlineImageLoad(message)"
+                      (error)="onInlineImageError(message)"
+                    >
+                  </button>
+                </ng-container>
+                <p class="image-caption" *ngIf="shouldRenderImagePreview(message) && message.text && message.text !== message.filename && message.text !== 'image' && message.text !== 'Attachment'">
                   {{ message.text }}
                 </p>
-                <div class="file-message-header" *ngIf="!isImageFileMessage(message)">
-                  <i class="fa-solid" [ngClass]="getFileIconClass(message)"></i>
+                <button type="button" class="file-message-header file-preview-link" *ngIf="!shouldRenderImagePreview(message)" (click)="openFileViewer(message)">
+                  <div class="doc-icon-wrap" [class.pdf-icon]="isPdfFileMessage(message)">
+                    <i class="fa-solid" [class.fa-file-pdf]="isPdfFileMessage(message)" [class.fa-file]="!isPdfFileMessage(message)"></i>
+                  </div>
                   <div class="file-meta">
                     <span class="file-name">{{ message.filename || message.text }}</span>
-                    <span class="file-type">{{ getFileTypeLabel(message) }}</span>
+                    <span class="file-type">{{ isPdfFileMessage(message) ? 'PDF' : 'Document' }}</span>
                   </div>
-                </div>
-                <div class="file-actions" *ngIf="message.fileUrl && !isImageFileMessage(message)">
-                  <button type="button" class="file-open-link" (click)="openFileViewer(message)">Open</button>
-                  <button type="button" class="file-download-link" (click)="downloadFileMessage(message)">Download</button>
-                </div>
+                </button>
               </div>
             </ng-container>
             <ng-template #textMessageTpl>
@@ -358,21 +368,35 @@
 
       <div class="image-viewer" *ngIf="activeFileViewer as viewer" (click)="closeFileViewer()">
         <div class="image-viewer-content" (click)="$event.stopPropagation()">
-          <button type="button" class="image-viewer-close" (click)="closeFileViewer()" aria-label="Close file preview">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
+          <div class="image-viewer-controls">
+            <button
+              type="button"
+              class="image-viewer-download"
+              [disabled]="isViewerDownloadInProgress"
+              (click)="downloadActiveViewerFile()"
+              aria-label="Download file"
+            >
+              <i class="fa-solid" [class.fa-download]="!isViewerDownloadInProgress" [class.fa-spinner]="isViewerDownloadInProgress" [class.fa-spin]="isViewerDownloadInProgress"></i>
+            </button>
+            <button type="button" class="image-viewer-close" (click)="closeFileViewer()" aria-label="Close file preview">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
           <ng-container *ngIf="viewer.isImage; else nonImageViewerTpl">
             <img [src]="viewer.url" [alt]="viewer.name">
           </ng-container>
           <ng-template #nonImageViewerTpl>
             <div class="file-viewer-stage" *ngIf="viewer.isPdf && activeFileViewerResourceUrl; else genericFileViewerTpl">
-              <iframe [src]="activeFileViewerResourceUrl" title="PDF preview"></iframe>
+              <div class="pdf-viewer-loading" *ngIf="isPdfViewerLoading">
+                <span class="image-loading-spinner"></span>
+                <span>Loading PDF preview...</span>
+              </div>
+              <iframe [class.pdf-frame-hidden]="isPdfViewerLoading" [src]="activeFileViewerResourceUrl" title="PDF preview" (load)="onPdfViewerLoad()"></iframe>
             </div>
             <ng-template #genericFileViewerTpl>
               <div class="generic-file-viewer">
                 <i class="fa-solid" [ngClass]="getFileIconClassByNameAndMimeType(viewer.name, viewer.mimeType)"></i>
                 <p>{{ viewer.name }}</p>
-                <button type="button" class="file-download-link" (click)="downloadActiveViewerFile()">Download file</button>
               </div>
             </ng-template>
           </ng-template>

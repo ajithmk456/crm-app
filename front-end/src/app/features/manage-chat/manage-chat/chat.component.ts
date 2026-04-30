@@ -70,6 +70,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   retryingMessageId: string | null = null;
   activeFileViewer: ActiveFileViewer | null = null;
   activeFileViewerResourceUrl: SafeResourceUrl | null = null;
+  isPdfViewerLoading = false;
+  isViewerDownloadInProgress = false;
   showAttachmentMenu = false;
   showEmojiPicker = false;
   activeMessageMenuId: string | null = null;
@@ -226,6 +228,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   private hasSanitizedPhoneQueryParam = false;
   private draftByConversationId: Record<string, string> = {};
   private lastConversationFetchAt = 0;
+  private readonly optimisticImagePreviewUrls = new Set<string>();
+  private readonly brokenInlineImageMessageIds = new Set<string>();
+  private readonly loadedInlineImageMessageIds = new Set<string>();
+  isFullscreen = false;
 
   constructor(
     private readonly chatService: ChatService,
@@ -288,10 +294,20 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     this.scrollToBottom();
   }
 
+  toggleFullscreen(): void {
+    this.isFullscreen = !this.isFullscreen;
+    document.body.classList.toggle('chat-fullscreen', this.isFullscreen);
+  }
+
   ngOnDestroy(): void {
+    document.body.classList.remove('chat-fullscreen');
     this.resetAttachmentDraftState();
     this.activeFileViewer = null;
     this.activeFileViewerResourceUrl = null;
+    this.optimisticImagePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+    this.optimisticImagePreviewUrls.clear();
+    this.brokenInlineImageMessageIds.clear();
+    this.loadedInlineImageMessageIds.clear();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -638,6 +654,38 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     return message.messageId || message._id || `${message.timestamp}-${message.text}`;
   }
 
+  shouldShowDateSeparator(index: number): boolean {
+    if (index <= 0 || index >= this.messages.length) {
+      return index === 0;
+    }
+
+    const currentKey = this.getDateGroupingKey(this.messages[index]?.timestamp);
+    const previousKey = this.getDateGroupingKey(this.messages[index - 1]?.timestamp);
+    return currentKey !== previousKey;
+  }
+
+  getDateSeparatorLabel(timestamp: string): string {
+    const messageDate = this.toDateOnly(timestamp);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (messageDate.getTime() === today.getTime()) {
+      return 'Today';
+    }
+
+    if (messageDate.getTime() === yesterday.getTime()) {
+      return 'Yesterday';
+    }
+
+    return messageDate.toLocaleDateString(undefined, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+
   retryFailedMessage(message: PendingMessage): void {
     if (!this.selectedConversation || message.status !== 'failed' || this.retryingMessageId) {
       return;
@@ -721,7 +769,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   isFileMessage(message: PendingMessage): boolean {
-    return message.type === 'file' || Boolean(message.fileUrl || message.filename);
+    return Boolean(message.fileUrl || message.filename);
   }
 
   isImageFileMessage(message: PendingMessage): boolean {
@@ -740,6 +788,28 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       || fallbackText === 'image'
       || fileUrl.includes('filemanager.gupshup.io')
     );
+  }
+
+  shouldRenderImagePreview(message: PendingMessage): boolean {
+    const messageId = this.getMessageMenuId(message);
+    return this.isImageFileMessage(message) && Boolean(message.fileUrl) && !this.brokenInlineImageMessageIds.has(messageId);
+  }
+
+  onInlineImageError(message: PendingMessage): void {
+    const messageId = this.getMessageMenuId(message);
+    this.brokenInlineImageMessageIds.add(messageId);
+    this.loadedInlineImageMessageIds.add(messageId);
+  }
+
+  onInlineImageLoad(message: PendingMessage): void {
+    const messageId = this.getMessageMenuId(message);
+    this.loadedInlineImageMessageIds.add(messageId);
+    // Force scroll to bottom once image expands the container.
+    this.queueScrollToBottom(true, true);
+  }
+
+  isInlineImageLoaded(message: PendingMessage): boolean {
+    return this.loadedInlineImageMessageIds.has(this.getMessageMenuId(message));
   }
 
   onAttachmentCaptionKeydown(event: KeyboardEvent): void {
@@ -798,11 +868,19 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const fileName = String(message.filename || '').toLowerCase();
     const mimeType = String(message.mimeType || '').toLowerCase();
-    return mimeType.includes('pdf') || fileName.endsWith('.pdf');
+    const fileUrl = this.normalizeFileUrl(String(message.fileUrl || '')).toLowerCase();
+    const fallbackText = String(message.text || '').toLowerCase();
+
+    return (
+      mimeType.includes('pdf')
+      || fileName.endsWith('.pdf')
+      || /\.pdf(\?|$)/i.test(fileUrl)
+      || fallbackText.endsWith('.pdf')
+    );
   }
 
   openFileViewer(message: PendingMessage): void {
-    const fileUrl = String(message.fileUrl || '').trim();
+    const fileUrl = this.normalizeFileUrl(String(message.fileUrl || ''));
     if (!fileUrl) {
       return;
     }
@@ -820,14 +898,21 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       isPdf,
     };
 
+    this.isPdfViewerLoading = isPdf;
     this.activeFileViewerResourceUrl = isPdf
-      ? this.sanitizer.bypassSecurityTrustResourceUrl(fileUrl)
+      ? this.sanitizer.bypassSecurityTrustResourceUrl(this.buildPdfEmbedUrl(fileUrl))
       : null;
+  }
+
+  onPdfViewerLoad(): void {
+    this.isPdfViewerLoading = false;
   }
 
   closeFileViewer(): void {
     this.activeFileViewer = null;
     this.activeFileViewerResourceUrl = null;
+    this.isPdfViewerLoading = false;
+    this.isViewerDownloadInProgress = false;
   }
 
   async downloadFileMessage(message: PendingMessage): Promise<void> {
@@ -845,31 +930,34 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
-    await this.downloadFileFromUrl(viewer.url, String(viewer.name || 'attachment'));
+    this.isViewerDownloadInProgress = true;
+    try {
+      await this.downloadFileFromUrl(viewer.url, String(viewer.name || 'attachment'));
+    } finally {
+      window.setTimeout(() => {
+        this.isViewerDownloadInProgress = false;
+      }, 900);
+    }
   }
 
   private async downloadFileFromUrl(fileUrl: string, fileName: string): Promise<void> {
-    if (!fileUrl) {
+    const normalizedUrl = this.normalizeFileUrl(fileUrl);
+    if (!normalizedUrl) {
       return;
     }
 
-    try {
-      const response = await fetch(fileUrl, { mode: 'cors' });
-      if (!response.ok) {
-        throw new Error('Download failed');
-      }
+    const downloadUrl = this.resolveDownloadUrl(normalizedUrl);
 
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
+    try {
       const anchor = document.createElement('a');
-      anchor.href = objectUrl;
+      anchor.href = downloadUrl;
       anchor.download = fileName || 'attachment';
+      anchor.rel = 'noopener';
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
-      URL.revokeObjectURL(objectUrl);
     } catch {
-      window.open(fileUrl, '_blank', 'noopener');
+      window.open(downloadUrl, '_blank', 'noopener');
     }
   }
 
@@ -935,7 +1023,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     const fileName = String(message.filename || '').toLowerCase();
+    const fileUrl = this.normalizeFileUrl(String(message.fileUrl || '')).toLowerCase();
     if (fileName.endsWith('.pdf')) {
+      return 'application/pdf';
+    }
+
+    if (/\.pdf(\?|$)/i.test(fileUrl)) {
       return 'application/pdf';
     }
 
@@ -948,6 +1041,40 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     return 'application/octet-stream';
+  }
+
+  private normalizeFileUrl(fileUrl: string): string {
+    const trimmedUrl = String(fileUrl || '').trim();
+    if (!trimmedUrl) {
+      return '';
+    }
+
+    return trimmedUrl
+      .replace(/\\/g, '/')
+      .replace(/ /g, '%20');
+  }
+
+  private resolveDownloadUrl(fileUrl: string): string {
+    try {
+      const parsedUrl = new URL(fileUrl, window.location.origin);
+      parsedUrl.searchParams.set('download', 'true');
+      return parsedUrl.toString();
+    } catch {
+      if (/([?&])download=false/i.test(fileUrl)) {
+        return fileUrl.replace(/([?&])download=false/ig, '$1download=true');
+      }
+
+      if (/([?&])download=true/i.test(fileUrl)) {
+        return fileUrl;
+      }
+
+      return `${fileUrl}${fileUrl.includes('?') ? '&' : '?'}download=true`;
+    }
+  }
+
+  private buildPdfEmbedUrl(fileUrl: string): string {
+    const normalizedUrl = this.normalizeFileUrl(fileUrl);
+    return `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(normalizedUrl)}`;
   }
 
   private buildTaskTitleFromMessage(messageText: string): string {
@@ -1081,7 +1208,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
       if (this.forceScrollOnNextMessageUpdate) {
         this.forceScrollOnNextMessageUpdate = false;
-        this.queueScrollToBottom(true);
+        this.queueScrollToBottom(true, true); // instant jump on conversation open
         return;
       }
 
@@ -1164,7 +1291,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
       if (this.forceScrollOnNextMessageUpdate) {
         this.forceScrollOnNextMessageUpdate = false;
-        this.queueScrollToBottom(true);
+        this.queueScrollToBottom(true, true); // instant jump on conversation open
         return;
       }
 
@@ -1412,15 +1539,20 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     fallbackText: string
   ): void {
     const now = new Date().toISOString();
+    const localPreviewUrl = attachment.isImage ? URL.createObjectURL(attachment.file) : '';
+    if (localPreviewUrl) {
+      this.optimisticImagePreviewUrls.add(localPreviewUrl);
+    }
+
     const pendingMessage: PendingMessage = {
       _id: localPendingId,
       messageId: localPendingId,
       conversationId: conversation._id,
       from: 'me',
       to: conversation.phoneNumber,
-      text: fallbackText || attachment.name || 'Attachment',
+      text: fallbackText || attachment.name || '',
       type: 'file',
-      fileUrl: '',
+      fileUrl: localPreviewUrl,
       filename: attachment.name,
       mimeType: attachment.mimeType,
       direction: 'outgoing',
@@ -1448,6 +1580,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     patch?: Partial<PendingMessage>
   ): void {
     const resolvedId = String(providerMessageId || localPendingId);
+    const existingPending = this.pendingMessages.find((message) => message.messageId === localPendingId);
+    const previousFileUrl = String(existingPending?.fileUrl || '');
+    const nextFileUrl = String(patch?.fileUrl || '');
+
+    if (previousFileUrl.startsWith('blob:') && nextFileUrl && nextFileUrl !== previousFileUrl) {
+      URL.revokeObjectURL(previousFileUrl);
+      this.optimisticImagePreviewUrls.delete(previousFileUrl);
+    }
+
     this.pendingMessages = this.pendingMessages.map((message) => {
       if (message.messageId !== localPendingId) {
         return message;
@@ -1646,11 +1787,17 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     return `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  private queueScrollToBottom(force = false): void {
-    requestAnimationFrame(() => this.scrollToBottom(force));
+  private queueScrollToBottom(force = false, instant = false): void {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      this.scrollToBottom(force, instant);
+      if (instant) {
+        // After images load they expand the container — re-scroll once more.
+        this.scrollAfterImagesLoad();
+      }
+    }));
   }
 
-  private scrollToBottom(force = false): void {
+  private scrollToBottom(force = false, instant = false): void {
     const container = this.messageScroller?.nativeElement;
     if (!container) {
       return;
@@ -1661,12 +1808,42 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: 'smooth',
-    });
+    // Use direct assignment for instant — guaranteed to reach the bottom.
+    if (instant) {
+      container.scrollTop = container.scrollHeight;
+    } else {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    }
     this.showScrollToBottomButton = false;
     this.unreadNewMessages = 0;
+  }
+
+  private scrollAfterImagesLoad(): void {
+    const container = this.messageScroller?.nativeElement;
+    if (!container) {
+      return;
+    }
+
+    const images = Array.from(container.querySelectorAll<HTMLImageElement>('img'));
+    const unloaded = images.filter((img) => !img.complete);
+    if (!unloaded.length) {
+      return;
+    }
+
+    let remaining = unloaded.length;
+    const onSettle = () => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        container.scrollTop = container.scrollHeight;
+        this.showScrollToBottomButton = false;
+        this.unreadNewMessages = 0;
+      }
+    };
+
+    unloaded.forEach((img) => {
+      img.addEventListener('load', onSettle, { once: true });
+      img.addEventListener('error', onSettle, { once: true });
+    });
   }
 
   private isNearBottom(threshold = 96): boolean {
@@ -1780,5 +1957,20 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     } catch {
       // Ignore storage errors silently to avoid breaking chat input.
     }
+  }
+
+  private getDateGroupingKey(timestamp: string): string {
+    const date = this.toDateOnly(timestamp);
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  }
+
+  private toDateOnly(timestamp: string): Date {
+    const parsed = new Date(timestamp || Date.now());
+    if (Number.isNaN(parsed.getTime())) {
+      const fallback = new Date();
+      return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate());
+    }
+
+    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
   }
 }

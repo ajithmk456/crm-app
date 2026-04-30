@@ -419,3 +419,16 @@
     flex-direction: column;
   }
 }
+/* Mobile scroll fix */
+@media (max-width: 768px) {
+  :host {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .superadmin-page {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+}
+

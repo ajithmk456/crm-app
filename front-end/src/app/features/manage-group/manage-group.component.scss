@@ -542,3 +542,15 @@
     width: 100%;
   }
 }
+/* Mobile scroll fix */
+@media (max-width: 768px) {
+  :host {
+    overflow-y: auto;
+  }
+  .group-wrapper {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+}
+

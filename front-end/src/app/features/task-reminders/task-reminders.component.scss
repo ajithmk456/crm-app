@@ -345,3 +345,16 @@
     }
   }
 }
+
+/* Mobile scroll fix */
+@media (max-width: 768px) {
+  :host {
+    overflow-y: auto;
+  }
+  .reminder-screen {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+}
+

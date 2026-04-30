@@ -234,3 +234,15 @@
     padding: 16px;
   }
 }
+/* Mobile scroll fix */
+@media (max-width: 768px) {
+  :host {
+    overflow-y: auto;
+  }
+  .bulk-wrapper {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+}
+

@@ -242,6 +242,7 @@
 
   .layout-container {
     padding: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 12px));
     gap: 8px;
   }
 

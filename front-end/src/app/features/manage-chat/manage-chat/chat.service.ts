@@ -2,6 +2,7 @@ import { HttpClient, HttpEventType } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
+import { environment } from '../../../../environments/environment';
 
 export interface ChatConversation {
   _id: string;
@@ -109,6 +110,7 @@ export interface RealtimeChatEvent {
 @Injectable({ providedIn: 'root' })
 export class ChatService {
   private readonly socket: Socket;
+  private readonly apiBaseUrl = String(environment.apiBaseUrl || '').replace(/\/$/, '');
 
   constructor(private readonly http: HttpClient) {
     this.socket = io('/', {
@@ -145,7 +147,8 @@ export class ChatService {
         ...response,
         data: (response.data || []).reduce<ChatMessage[]>((acc, item) => {
           const normalizedText = String(item.text || '').trim();
-          const fileUrl = String(item.fileUrl || item.url || '').trim();
+          const rawFileUrl = String(item.fileUrl || item.url || '').trim();
+          const fileUrl = this.toAbsoluteFileUrl(rawFileUrl);
           const inferredNameFromUrl = fileUrl ? decodeURIComponent(fileUrl.split('?')[0].split('/').pop() || '') : '';
           const filename = String(item.filename || inferredNameFromUrl || '').trim();
           const mimeType = String(item.mimeType || item.mimetype || '').trim();
@@ -246,5 +249,22 @@ export class ChatService {
         this.socket.off('chat:update', handler);
       };
     });
+  }
+
+  private toAbsoluteFileUrl(url: string): string {
+    const normalized = String(url || '').trim();
+    if (!normalized) {
+      return '';
+    }
+
+    if (/^https?:\/\//i.test(normalized)) {
+      return normalized;
+    }
+
+    if (normalized.startsWith('/')) {
+      return this.apiBaseUrl ? `${this.apiBaseUrl}${normalized}` : normalized;
+    }
+
+    return this.apiBaseUrl ? `${this.apiBaseUrl}/${normalized}` : normalized;
   }
 }

@@ -593,3 +593,16 @@ textarea:focus {
   border-radius: 8px;
   cursor: pointer;
 }
+
+/* Mobile scroll fix */
+@media (max-width: 768px) {
+  :host {
+    overflow-y: auto;
+  }
+  .employee-container {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+}
+

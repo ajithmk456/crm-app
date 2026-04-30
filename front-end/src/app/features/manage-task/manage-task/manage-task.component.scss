@@ -432,3 +432,11 @@
     transform: scale(1);
   }
 }
+
+/* Mobile scroll fix */
+@media (max-width: 768px) {
+  :host {
+    overflow-y: auto;
+  }
+}
+
