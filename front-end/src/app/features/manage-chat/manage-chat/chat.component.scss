@@ -1260,6 +1260,7 @@
   position: relative;
   display: inline-flex;
   align-items: center;
+  --attach-center-x: 50%;
 }
 
 .tool-button {
@@ -1330,19 +1331,20 @@
 
 .attachment-menu {
   position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
+  left: var(--attach-center-x);
+  bottom: calc(100% + 6px);
   transform: translateX(-50%);
-  min-width: 154px;
-  padding: 6px;
+  min-width: 146px;
+  padding: 5px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.14);
 
   &::after {
     content: '';
     position: absolute;
-    left: 50%;
+    left: var(--attach-center-x);
     bottom: -6px;
     width: 10px;
     height: 10px;
@@ -1357,21 +1359,34 @@
   border: 0;
   background: transparent;
   text-align: left;
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 16px 1fr;
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
+  min-height: 34px;
   border-radius: 8px;
-  padding: 7px 9px;
+  padding: 6px 9px;
   color: #1f2937;
   font-size: 13px;
+  line-height: 1.15;
   font-weight: 600;
   cursor: pointer;
 
   i {
-    width: 14px;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     color: #64748b;
     font-size: 13px;
+    line-height: 1;
+  }
+
+  span {
+    display: block;
+    line-height: 1.15;
   }
 
   &:hover {
@@ -1381,6 +1396,13 @@
     i {
       color: #0f766e;
     }
+  }
+}
+
+.attach-button-inline {
+  &.active {
+    background: #e6f4ef;
+    color: #0f766e;
   }
 }
 
