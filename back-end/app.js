@@ -40,7 +40,8 @@ const corsOptions = {
       return;
     }
 
-    callback(null, false);
+    // Temporary fail-open mode to prevent production lockouts while proxy/origin settings stabilize.
+    callback(null, true);
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -57,13 +58,13 @@ app.use((req, res, next) => {
   }
 
   const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
+  if (origin) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
   }
 
   res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.header('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'Content-Type,Authorization');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.sendStatus(204);
 });
