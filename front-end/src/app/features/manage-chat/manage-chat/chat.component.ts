@@ -1103,10 +1103,6 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     interval(15000).pipe(
       startWith(0),
       switchMap(() => {
-        if (this.socketConnected && this.conversations.length) {
-          return of({ success: true, data: this.conversations });
-        }
-
         this.isLoadingConversations = !this.conversations.length;
         return this.chatService.getConversations().pipe(
           catchError(() => of({ success: false, data: [] as ChatConversation[] }))
@@ -1195,10 +1191,6 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
         return interval(4000).pipe(
           startWith(0),
           switchMap(() => {
-            if (this.socketConnected && this.messages.length) {
-              return of({ success: true, data: this.messages as ChatMessage[] });
-            }
-
             this.isLoadingMessages = !this.messages.length;
             return this.chatService.getMessages(conversationId).pipe(
               catchError(() => of({ success: false, data: [] as ChatMessage[] }))
