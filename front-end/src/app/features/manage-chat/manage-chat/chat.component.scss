@@ -112,8 +112,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 6px 12px 4px;
-  padding: 4px 10px;
+  margin: 4px 10px 2px;
+  padding: 3px 9px;
   min-height: 26px;
   border-radius: 6px;
   background: #f0f2f5;
@@ -137,8 +137,8 @@
 .conversation-filters {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px 10px;
+  gap: 6px;
+  padding: 0 10px 7px;
 }
 
 .filter-chip {
@@ -180,35 +180,63 @@
 }
 
 .conversation-list {
-  padding: 0 5px 6px;
+  padding: 0 4px 6px;
 }
 
 .conversation-card {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 10px;
-  margin-bottom: 1px;
+  gap: 8px;
+  padding: 6px 9px;
+  margin-bottom: 0;
   border: 0;
   border-radius: 8px;
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 54px;
+    right: 8px;
+    bottom: 0;
+    border-bottom: 1px solid #eef2f5;
+  }
 
   &:hover {
-    background: #f5f6f6;
+    background: #f5f7f8;
   }
 
   &.active {
-    background: #e9edef;
+    background: #e7f3ef;
+    box-shadow: inset 2px 0 0 #00a884;
+
+    &::after {
+      border-bottom-color: transparent;
+    }
+  }
+
+  &.unread {
+    .conversation-copy h3,
+    .conversation-copy p,
+    .conversation-row time {
+      font-weight: 700;
+      color: #1f2937;
+    }
+
+    .conversation-copy p {
+      color: #334155;
+    }
   }
 }
 
 .avatar {
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   flex-shrink: 0;
   display: inline-flex;
@@ -239,13 +267,15 @@
   h3 {
     font-size: 13px;
     color: #111b21;
-    font-weight: 600;
+    font-weight: 700;
+    line-height: 1.2;
   }
 
   p {
-    margin-top: 2px;
+    margin-top: 1px;
     color: #54656f;
     font-size: 11px;
+    line-height: 1.25;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -260,20 +290,22 @@
   display: flex;
   gap: 8px;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
 
   time {
     flex-shrink: 0;
     color: #667781;
     font-size: 10px;
     font-weight: 600;
+    line-height: 1.2;
+    margin-top: 1px;
   }
 }
 
 .conversation-right-meta {
   display: inline-flex;
-  align-items: center;
-  gap: 7px;
+  align-items: flex-start;
+  gap: 6px;
   flex-shrink: 0;
 }
 
