@@ -1,5 +1,7 @@
 const express = require('express');
 const {
+	startChatSession,
+	getChatTemplates,
 	sendChatMessage,
 	sendChatFile,
 	sendChatTemplate,
@@ -9,6 +11,9 @@ const {
 } = require('../controllers/chatController');
 
 const router = express.Router();
+
+router.post('/start', startChatSession);
+router.get('/templates', getChatTemplates);
 
 /**
  * @openapi

@@ -95,6 +95,12 @@
             </p>
           </div>
         </div>
+        <div class="chat-header-actions" *ngIf="!isSessionActive">
+          <button type="button" class="start-template-button" (click)="openTemplateModal()">
+            <i class="fa-regular fa-paper-plane"></i>
+            <span>Start with Template</span>
+          </button>
+        </div>
       </header>
 
       <div class="attachment-compose-overlay" *ngIf="selectedAttachment as attachment">
@@ -344,9 +350,13 @@
               (ngModelChange)="onDraftChanged()"
               rows="1"
               placeholder="Type a message"
-              [disabled]="hasAttachmentDrafts"
+              [disabled]="hasAttachmentDrafts || !isSessionActive"
               (keydown)="onComposerKeydown($event)"
             ></textarea>
+          </div>
+          <div class="session-expired-notice" *ngIf="!isSessionActive">
+            Session has expired. Send an approved template to start the conversation.
+            <button type="button" class="inline-template-action" (click)="openTemplateModal()">Choose Template</button>
           </div>
           <div class="attachment-mode-hint" *ngIf="hasAttachmentDrafts">
             Add caption in preview bubble and press Send.
@@ -370,6 +380,90 @@
           <span>{{ isSending ? 'Sending...' : 'Send' }}</span>
         </button>
       </footer>
+
+      <div class="template-modal-backdrop" *ngIf="showTemplateModal" (click)="closeTemplateModal()">
+        <div class="template-modal" (click)="$event.stopPropagation()">
+          <div class="template-modal-header">
+            <h4>Start WhatsApp Chat</h4>
+            <button type="button" class="template-close" (click)="closeTemplateModal()">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <p class="template-helper">
+            This customer is outside the 24-hour session window. Send an approved template to initiate chat.
+          </p>
+
+          <div class="template-search-row">
+            <label class="template-field template-search-field">
+              <span>Search template</span>
+              <input type="text" [(ngModel)]="templateSearchTerm" placeholder="Search by name or content">
+            </label>
+          </div>
+
+          <div class="template-category-row" *ngIf="templateCategories.length > 0">
+            <button
+              type="button"
+              class="template-category-chip"
+              [class.active]="selectedTemplateCategory === 'all'"
+              (click)="onTemplateCategoryChanged('all')"
+            >
+              All
+            </button>
+            <button
+              type="button"
+              class="template-category-chip"
+              *ngFor="let category of templateCategories"
+              [class.active]="selectedTemplateCategory === category"
+              (click)="onTemplateCategoryChanged(category)"
+            >
+              {{ category }}
+            </button>
+          </div>
+
+          <div class="template-list" *ngIf="!isLoadingTemplates; else templateLoadingTpl">
+            <button
+              type="button"
+              class="template-item"
+              *ngFor="let item of filteredTemplates"
+              [class.active]="item.id === selectedTemplateId"
+              (click)="selectTemplate(item)"
+            >
+              <span class="template-item-name">{{ item.name || item.id }}</span>
+              <span class="template-item-meta">{{ item.category }} • {{ item.language }}</span>
+            </button>
+            <div class="template-empty" *ngIf="!filteredTemplates.length">No templates found.</div>
+          </div>
+          <ng-template #templateLoadingTpl>
+            <div class="template-empty">Loading templates...</div>
+          </ng-template>
+
+          <div class="template-variables" *ngIf="selectedTemplateVariableIndexes.length > 0">
+            <label class="template-field" *ngFor="let index of selectedTemplateVariableIndexes">
+              <span>Variable {{ index }}</span>
+              <input
+                type="text"
+                [ngModel]="templateVariables[index] || ''"
+                (ngModelChange)="onTemplateVariableChanged(index, $event)"
+                [placeholder]="'Enter value for {{' + index + '}}'"
+              >
+            </label>
+          </div>
+
+          <div class="template-preview">
+            <span class="label">Preview</span>
+            <p>{{ selectedTemplatePreview }}</p>
+          </div>
+
+          <p class="template-error" *ngIf="templateModalError">{{ templateModalError }}</p>
+
+          <div class="template-modal-actions">
+            <button type="button" class="template-secondary" (click)="closeTemplateModal()" [disabled]="isSendingTemplate">Cancel</button>
+            <button type="button" class="template-primary" (click)="sendTemplateToStartChat()" [disabled]="!selectedTemplateId || isSendingTemplate">
+              {{ isSendingTemplate ? 'Sending...' : 'Send Template' }}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div class="image-viewer" *ngIf="activeFileViewer as viewer" (click)="closeFileViewer()">
         <div class="image-viewer-content" (click)="$event.stopPropagation()">

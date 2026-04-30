@@ -1,4 +1,4 @@
-import { HttpClient, HttpEventType } from '@angular/common/http';
+import { HttpClient, HttpEventType, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
@@ -94,6 +94,31 @@ export interface SendTemplateRequest {
   to: string;
   templateId: string;
   params: string[];
+}
+
+export interface WhatsAppTemplateOption {
+  id: string;
+  name: string;
+  category: string;
+  language: string;
+  body: string;
+  variables: number[];
+}
+
+export interface ChatStartResponse {
+  success: boolean;
+  data?: {
+    phone: string;
+    nextAction: 'open_chat' | 'select_template';
+    session: {
+      isActive: boolean;
+      lastIncomingAt: string | null;
+      expiresAt: string | null;
+    };
+    templates: WhatsAppTemplateOption[];
+  };
+  code?: string;
+  message?: string;
 }
 
 export interface RealtimeChatEvent {
@@ -235,6 +260,22 @@ export class ChatService {
 
   sendTemplate(data: SendTemplateRequest): Observable<SendMessageResponse> {
     return this.http.post<SendMessageResponse>('/api/chat/send-template', data);
+  }
+
+  getTemplates(options?: { language?: string; refresh?: boolean }): Observable<ApiListResponse<WhatsAppTemplateOption[]>> {
+    let params = new HttpParams();
+    if (options?.language) {
+      params = params.set('language', options.language);
+    }
+    if (options?.refresh) {
+      params = params.set('refresh', 'true');
+    }
+
+    return this.http.get<ApiListResponse<WhatsAppTemplateOption[]>>('/api/chat/templates', { params });
+  }
+
+  startChat(to: string): Observable<ChatStartResponse> {
+    return this.http.post<ChatStartResponse>('/api/chat/start', { to });
   }
 
   markConversationAsRead(phone: string): Observable<{ success: boolean; data?: { phoneNumber: string; unreadCount: number; lastReadAt?: string | null } }> {

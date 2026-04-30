@@ -16,6 +16,7 @@ const {
 } = require('../services/chatMessageStore');
 const { emitChatUpdate } = require('../services/socketService');
 const { resolveClientIdByPhone } = require('../services/activityHistoryService');
+const { getApprovedTemplates } = require('../services/chatTemplateService');
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -117,24 +118,128 @@ const mirrorIncomingAttachmentUrl = async (attachmentUrl, attachmentFilename, at
 };
 
 const isSessionActiveForPhone = async (phoneNumber) => {
+  const state = await getSessionStateForPhone(phoneNumber);
+  return state.isActive;
+};
+
+const safeLoadTemplates = async (language = '') => {
+  try {
+    return await getApprovedTemplates({ language });
+  } catch (_error) {
+    return [];
+  }
+};
+
+const getSessionStateForPhone = async (phoneNumber) => {
   const normalizedPhone = normalizePhone(phoneNumber);
   if (!normalizedPhone) {
-    return false;
+    return {
+      isActive: false,
+      lastIncomingAt: null,
+      expiresAt: null,
+    };
   }
 
   const conversation = await Conversation.findOne({ phoneNumber: normalizedPhone }).select('_id');
   if (!conversation?._id) {
-    return false;
+    return {
+      isActive: false,
+      lastIncomingAt: null,
+      expiresAt: null,
+    };
   }
 
-  const since = new Date(Date.now() - SESSION_WINDOW_MS);
-  const recentIncoming = await Message.findOne({
+  const latestIncoming = await Message.findOne({
     conversationId: conversation._id,
     direction: { $in: ['in', 'incoming'] },
-    timestamp: { $gte: since },
-  }).sort({ timestamp: -1 }).select('_id');
+  }).sort({ timestamp: -1 }).select('timestamp');
 
-  return Boolean(recentIncoming);
+  if (!latestIncoming?.timestamp) {
+    return {
+      isActive: false,
+      lastIncomingAt: null,
+      expiresAt: null,
+    };
+  }
+
+  const lastIncomingAt = new Date(latestIncoming.timestamp);
+  const expiresAt = new Date(lastIncomingAt.getTime() + SESSION_WINDOW_MS);
+
+  return {
+    isActive: Date.now() < expiresAt.getTime(),
+    lastIncomingAt,
+    expiresAt,
+  };
+};
+
+const sendSessionExpiredResponse = async (res, phoneNumber, options = {}) => {
+  const session = await getSessionStateForPhone(phoneNumber);
+  const templates = await safeLoadTemplates(options.language);
+
+  return res.status(403).json({
+    success: false,
+    code: 'WHATSAPP_SESSION_EXPIRED',
+    message: 'The 24-hour WhatsApp session has expired. Send a template message to start the conversation.',
+    data: {
+      phone: normalizePhone(phoneNumber),
+      nextAction: 'select_template',
+      session: {
+        isActive: session.isActive,
+        lastIncomingAt: session.lastIncomingAt,
+        expiresAt: session.expiresAt,
+      },
+      templates,
+    },
+  });
+};
+
+// POST /api/chat/start
+// Returns WhatsApp session state and available templates for chat initiation.
+exports.startChatSession = async (req, res, next) => {
+  try {
+    const { to, phone, language } = req.body || {};
+    const targetPhone = to || phone;
+    if (!targetPhone) {
+      return res.status(400).json({ success: false, message: 'to is required.' });
+    }
+
+    const normalizedPhone = normalizePhone(targetPhone);
+    const session = await getSessionStateForPhone(normalizedPhone);
+    const templates = await safeLoadTemplates(language);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        phone: normalizedPhone,
+        nextAction: session.isActive ? 'open_chat' : 'select_template',
+        session: {
+          isActive: session.isActive,
+          lastIncomingAt: session.lastIncomingAt,
+          expiresAt: session.expiresAt,
+        },
+        templates,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/chat/templates
+// Fetches approved WhatsApp templates from provider with cache support.
+exports.getChatTemplates = async (req, res, next) => {
+  try {
+    const language = String(req.query?.language || '').trim();
+    const forceRefresh = String(req.query?.refresh || '').toLowerCase() === 'true';
+    const templates = await getApprovedTemplates({ language, forceRefresh });
+
+    return res.status(200).json({
+      success: true,
+      data: templates,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // POST /api/chat/send
@@ -149,16 +254,12 @@ exports.sendChatMessage = async (req, res, next) => {
     }
 
     const hasActiveSession = await isSessionActiveForPhone(to);
-    const defaultTemplateId = process.env.GUPSHUP_DEFAULT_TEMPLATE_ID || 'welcome_template_v1';
-    const result = hasActiveSession
-      ? await sendGupshupTextMessage({ to, message: messageText })
-      : await sendGupshupTemplateMessage({
-        to,
-        templateId: defaultTemplateId,
-        params: [messageText],
-      });
+    if (!hasActiveSession) {
+      return sendSessionExpiredResponse(res, to, { language: req.body?.language });
+    }
+
+    const result = await sendGupshupTextMessage({ to, message: messageText });
     const messageId = result.messageId || `local-${Date.now()}`;
-    const dispatchedType = hasActiveSession ? 'text' : 'template';
 
     await saveMessage({
       messageId,
@@ -184,7 +285,7 @@ exports.sendChatMessage = async (req, res, next) => {
       success: true,
       data: {
         messageId,
-        type: dispatchedType,
+        type: 'text',
       },
     });
   } catch (error) {
@@ -213,6 +314,11 @@ exports.sendChatFile = async (req, res, next) => {
         success: false,
         message: 'fileUrl must be publicly accessible via HTTPS.',
       });
+    }
+
+    const hasActiveSession = await isSessionActiveForPhone(to);
+    if (!hasActiveSession) {
+      return sendSessionExpiredResponse(res, to, { language: req.body?.language });
     }
 
     const result = await sendGupshupFileMessage({
@@ -301,6 +407,8 @@ exports.sendChatTemplate = async (req, res, next) => {
       success: true,
       data: {
         messageId,
+        type: 'template',
+        templateId,
         status: 'sent',
       },
     });

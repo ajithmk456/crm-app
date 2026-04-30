@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -8,11 +9,13 @@ import { Subject, interval, of } from 'rxjs';
 import { catchError, startWith, switchMap, takeUntil } from 'rxjs/operators';
 import {
   ChatConversation,
+  ChatStartResponse,
   ChatMessage,
   ChatMessageMetadata,
   ChatService,
   RealtimeChatEvent,
   SendFileRequest,
+  WhatsAppTemplateOption,
 } from './chat.service';
 
 interface PendingMessage extends ChatMessage {
@@ -62,6 +65,20 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   isUploadingAttachment = false;
   uploadProgress = 0;
   sessionState: 'active' | 'expired' = 'active';
+  sessionInfo: { lastIncomingAt: string | null; expiresAt: string | null } = {
+    lastIncomingAt: null,
+    expiresAt: null,
+  };
+  availableTemplates: WhatsAppTemplateOption[] = [];
+  showTemplateModal = false;
+  selectedTemplateId = '';
+  templateSearchTerm = '';
+  selectedTemplateCategory = 'all';
+  templateVariables: Record<number, string> = {};
+  isSendingTemplate = false;
+  isLoadingTemplates = false;
+  templateModalError = '';
+  isCheckingSession = false;
   showScrollToBottomButton = false;
   unreadNewMessages = 0;
   selectedAttachment: SelectedAttachment | null = null;
@@ -227,6 +244,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   private outgoingFileCaptionByMessageId: Record<string, string> = {};
   private forceScrollOnNextMessageUpdate = false;
   private targetConversationPhone = '';
+  private pendingTemplatePromptPhone = '';
   private hasSanitizedPhoneQueryParam = false;
   private draftByConversationId: Record<string, string> = {};
   private lastConversationFetchAt = 0;
@@ -257,9 +275,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
         }
       });
 
+    const startChatRequested = Boolean(window.history.state?.startChat);
     const statePhone = this.normalizePhone(window.history.state?.targetPhone || '');
     if (statePhone) {
       this.targetConversationPhone = statePhone;
+      if (startChatRequested) {
+        this.pendingTemplatePromptPhone = statePhone;
+      }
     }
 
     this.route.queryParamMap
@@ -345,6 +367,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   get canSend(): boolean {
     return (
       !!this.selectedConversation
+      && this.isSessionActive
       && (!!this.draftMessage.trim() || this.hasAttachmentDrafts)
       && !this.isSending
       && !this.isUploadingAttachment
@@ -352,7 +375,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   get canSendAttachmentPreview(): boolean {
-    return !!this.selectedConversation && this.attachmentQueue.length > 0 && !this.isSending && !this.isUploadingAttachment;
+    return !!this.selectedConversation && this.isSessionActive && this.attachmentQueue.length > 0 && !this.isSending && !this.isUploadingAttachment;
   }
 
   get isImageAttachmentSelected(): boolean {
@@ -385,12 +408,83 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.isSessionActive ? 'Active session' : 'Session expired';
   }
 
+  get selectedTemplatePreview(): string {
+    const selectedTemplate = this.selectedTemplate;
+    const templateBody = String(selectedTemplate?.body || '').trim();
+    if (!templateBody) {
+      return 'Template preview will appear here.';
+    }
+
+    return templateBody.replace(/\{\{\s*(\d+)\s*\}\}/g, (_match, index) => {
+      const key = Number(index);
+      const value = String(this.templateVariables[key] || '').trim();
+      return value || `{{${key}}}`;
+    });
+  }
+
+  get selectedTemplate(): WhatsAppTemplateOption | null {
+    return this.availableTemplates.find((item) => item.id === this.selectedTemplateId) || null;
+  }
+
+  get templateCategories(): string[] {
+    const categories = [...new Set(this.availableTemplates.map((item) => String(item.category || 'Utility').trim()).filter(Boolean))];
+    return categories.sort((a, b) => a.localeCompare(b));
+  }
+
+  get filteredTemplates(): WhatsAppTemplateOption[] {
+    const search = this.templateSearchTerm.trim().toLowerCase();
+
+    return this.availableTemplates.filter((template) => {
+      if (this.selectedTemplateCategory !== 'all' && template.category !== this.selectedTemplateCategory) {
+        return false;
+      }
+
+      if (!search) {
+        return true;
+      }
+
+      return [template.name, template.id, template.body]
+        .some((value) => String(value || '').toLowerCase().includes(search));
+    });
+  }
+
+  get selectedTemplateVariableIndexes(): number[] {
+    const variables = this.selectedTemplate?.variables;
+    if (!Array.isArray(variables)) {
+      return [];
+    }
+
+    return [...variables].sort((a, b) => a - b);
+  }
+
   selectConversation(conversation: ChatConversation): void {
     const wasAlreadySelected = this.selectedConversation?._id === conversation._id;
+    const normalizedPhone = this.normalizePhone(conversation.phoneNumber);
+    const shouldPromptTemplate = Boolean(
+      normalizedPhone
+      && this.pendingTemplatePromptPhone
+      && normalizedPhone === this.pendingTemplatePromptPhone
+    );
+    if (shouldPromptTemplate) {
+      this.pendingTemplatePromptPhone = '';
+    }
 
     this.selectedConversation = conversation;
+    this.showTemplateModal = false;
+    this.templateModalError = '';
     this.draftMessage = this.draftByConversationId[conversation._id] || '';
     this.markConversationAsRead(conversation, true);
+    if (this.isMockConversation(conversation._id)) {
+      this.sessionState = 'active';
+      this.sessionInfo = {
+        lastIncomingAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      };
+      this.availableTemplates = [];
+      this.selectedTemplateId = '';
+    } else {
+      this.refreshSessionState(conversation.phoneNumber, shouldPromptTemplate);
+    }
 
     if (wasAlreadySelected) {
       return;
@@ -433,6 +527,11 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    if (!this.isSessionActive) {
+      this.openTemplateModal();
+      return;
+    }
+
     if (this.hasAttachmentDrafts) {
       this.sendAttachmentMessage(this.selectedConversation, attachmentText);
       return;
@@ -465,15 +564,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response) => {
         this.isSending = false;
-        const messageType = String(response.data?.type || 'text').toLowerCase();
-        this.resolvePendingMessage(
-          localPendingId,
-          response.data?.messageId,
-          messageType === 'template' ? { text: `${text}\n(Template sent - session expired)` } : undefined
-        );
+        this.resolvePendingMessage(localPendingId, response.data?.messageId);
       },
-      error: () => {
+      error: (error: unknown) => {
         this.isSending = false;
+        if (this.handleSessionExpiredError(error)) {
+          this.removePendingMessage(localPendingId);
+          return;
+        }
         this.markPendingMessageFailed(localPendingId);
       }
     });
@@ -631,6 +729,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     event.preventDefault();
     this.showEmojiPicker = false;
     this.showAttachmentMenu = false;
+    if (!this.isSessionActive) {
+      this.openTemplateModal();
+      return;
+    }
     this.sendMessage();
   }
 
@@ -694,6 +796,11 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    if (!this.isSessionActive) {
+      this.openTemplateModal();
+      return;
+    }
+
     if (this.isFileMessage(message)) {
       this.retryFailedFileMessage(message);
       return;
@@ -715,15 +822,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response) => {
         this.retryingMessageId = null;
-        const messageType = String(response.data?.type || 'text').toLowerCase();
-        this.resolvePendingMessage(
-          localPendingId,
-          response.data?.messageId,
-          messageType === 'template' ? { text: `${retryText}\n(Template sent - session expired)` } : undefined
-        );
+        this.resolvePendingMessage(localPendingId, response.data?.messageId);
       },
-      error: () => {
+      error: (error: unknown) => {
         this.retryingMessageId = null;
+        if (this.handleSessionExpiredError(error)) {
+          this.removePendingMessage(localPendingId);
+          return;
+        }
         this.markPendingMessageFailed(localPendingId);
       },
     });
@@ -1046,6 +1152,192 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     return 'fa-file';
   }
 
+  openTemplateModal(): void {
+    if (!this.selectedConversation || this.isSessionActive) {
+      return;
+    }
+
+    this.templateModalError = '';
+    if (!this.availableTemplates.length) {
+      this.loadTemplatesFromApi();
+    }
+    this.showTemplateModal = true;
+  }
+
+  closeTemplateModal(): void {
+    if (this.isSendingTemplate) {
+      return;
+    }
+
+    this.showTemplateModal = false;
+    this.templateModalError = '';
+  }
+
+  sendTemplateToStartChat(): void {
+    if (!this.selectedConversation || !this.selectedTemplateId || this.isSendingTemplate) {
+      return;
+    }
+
+    this.isSendingTemplate = true;
+    this.templateModalError = '';
+
+    const params = this.selectedTemplateVariableIndexes.map((index) => String(this.templateVariables[index] || '').trim());
+    this.chatService.sendTemplate({
+      to: this.selectedConversation.phoneNumber,
+      templateId: this.selectedTemplateId,
+      params,
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.isSendingTemplate = false;
+        this.showTemplateModal = false;
+        if (this.selectedConversation) {
+          this.syncSelectedConversationPreview(`Template: ${this.selectedTemplateId}`, this.selectedConversation._id);
+          this.selectedConversation$.next(this.selectedConversation._id);
+          this.refreshConversationsFromApi(true);
+        }
+      },
+      error: () => {
+        this.isSendingTemplate = false;
+        this.templateModalError = 'Unable to send template message. Please try again.';
+      },
+    });
+  }
+
+  onTemplateChanged(): void {
+    this.syncTemplateVariableMap();
+    this.templateModalError = '';
+  }
+
+  selectTemplate(template: WhatsAppTemplateOption): void {
+    this.selectedTemplateId = template.id;
+    this.onTemplateChanged();
+  }
+
+  onTemplateCategoryChanged(category: string): void {
+    this.selectedTemplateCategory = category;
+  }
+
+  onTemplateVariableChanged(index: number, value: string): void {
+    this.templateVariables = {
+      ...this.templateVariables,
+      [index]: value,
+    };
+  }
+
+  private refreshSessionState(phoneNumber: string, promptTemplateWhenExpired = false): void {
+    const normalizedPhone = this.normalizePhone(phoneNumber);
+    if (!normalizedPhone) {
+      this.sessionState = 'expired';
+      this.sessionInfo = { lastIncomingAt: null, expiresAt: null };
+      return;
+    }
+
+    this.isCheckingSession = true;
+    this.chatService.startChat(normalizedPhone)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          this.isCheckingSession = false;
+          this.applyStartChatResponse(response);
+          if (promptTemplateWhenExpired && !this.isSessionActive) {
+            this.openTemplateModal();
+          }
+        },
+        error: () => {
+          this.isCheckingSession = false;
+          this.sessionState = 'expired';
+          this.sessionInfo = { lastIncomingAt: null, expiresAt: null };
+          if (promptTemplateWhenExpired) {
+            this.openTemplateModal();
+          }
+        },
+      });
+  }
+
+  private applyStartChatResponse(response: ChatStartResponse): void {
+    const session = response?.data?.session;
+    this.sessionState = session?.isActive ? 'active' : 'expired';
+    this.sessionInfo = {
+      lastIncomingAt: session?.lastIncomingAt || null,
+      expiresAt: session?.expiresAt || null,
+    };
+
+    const templates = Array.isArray(response?.data?.templates) ? response.data?.templates : [];
+    this.availableTemplates = templates || [];
+
+    if (!this.availableTemplates.length) {
+      this.selectedTemplateId = '';
+      this.templateVariables = {};
+      return;
+    }
+
+    if (!this.availableTemplates.some((item) => item.id === this.selectedTemplateId)) {
+      this.selectedTemplateId = this.availableTemplates[0].id;
+    }
+
+    this.syncTemplateVariableMap();
+  }
+
+  private loadTemplatesFromApi(forceRefresh = false): void {
+    this.isLoadingTemplates = true;
+    this.chatService.getTemplates({
+      language: 'en',
+      refresh: forceRefresh,
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (response) => {
+        this.isLoadingTemplates = false;
+        const templates = Array.isArray(response?.data) ? response.data : [];
+        this.availableTemplates = templates;
+
+        if (!this.availableTemplates.length) {
+          this.selectedTemplateId = '';
+          this.templateVariables = {};
+          return;
+        }
+
+        if (!this.availableTemplates.some((item) => item.id === this.selectedTemplateId)) {
+          this.selectedTemplateId = this.availableTemplates[0].id;
+        }
+        this.syncTemplateVariableMap();
+      },
+      error: () => {
+        this.isLoadingTemplates = false;
+        if (!this.availableTemplates.length) {
+          this.templateModalError = 'Unable to load templates right now. Please try again.';
+        }
+      },
+    });
+  }
+
+  private syncTemplateVariableMap(): void {
+    const requiredIndexes = this.selectedTemplateVariableIndexes;
+    const nextMap: Record<number, string> = {};
+
+    requiredIndexes.forEach((index) => {
+      nextMap[index] = this.templateVariables[index] || '';
+    });
+
+    this.templateVariables = nextMap;
+  }
+
+  private handleSessionExpiredError(error: unknown): boolean {
+    if (!(error instanceof HttpErrorResponse)) {
+      return false;
+    }
+
+    const errorCode = String(error.error?.code || '');
+    if (error.status !== 403 || errorCode !== 'WHATSAPP_SESSION_EXPIRED') {
+      return false;
+    }
+
+    this.applyStartChatResponse({
+      success: false,
+      data: error.error?.data,
+    });
+    this.openTemplateModal();
+    return true;
+  }
+
   private resolveMessageMimeType(message: PendingMessage): string {
     const explicitMimeType = String(message.mimeType || '').trim();
     if (explicitMimeType) {
@@ -1140,6 +1432,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
       if (!conversationsToRender.length) {
         this.conversations = [];
+        if (this.trySelectTargetConversation()) {
+          return;
+        }
         return;
       }
 
@@ -1167,24 +1462,47 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private trySelectTargetConversation(): boolean {
     if (!this.targetConversationPhone || !this.conversations.length) {
-      return false;
+      if (!this.targetConversationPhone) {
+        return false;
+      }
     }
 
     const match = this.conversations.find((conversation) => {
       return this.normalizePhone(conversation.phoneNumber) === this.targetConversationPhone;
     });
 
-    if (!match) {
+    const selectedMatch = match || this.buildAdhocConversation(this.targetConversationPhone);
+    if (!match && selectedMatch) {
+      this.conversations = this.sortConversationsForInbox([selectedMatch, ...this.conversations]);
+    }
+
+    if (!selectedMatch) {
       return false;
     }
 
     this.targetConversationPhone = '';
-    if (this.selectedConversation?._id === match._id) {
+    if (this.selectedConversation?._id === selectedMatch._id) {
       return true;
     }
 
-    this.selectConversation(match);
+    this.selectConversation(selectedMatch);
     return true;
+  }
+
+  private buildAdhocConversation(phoneNumber: string): ChatConversation | null {
+    const normalizedPhone = this.normalizePhone(phoneNumber);
+    if (!normalizedPhone) {
+      return null;
+    }
+
+    const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${normalizedPhone}`;
+    return {
+      _id: normalizedPhone,
+      phoneNumber: formattedPhone,
+      lastMessage: '',
+      unreadCount: 0,
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   @HostListener('document:click', ['$event'])
@@ -1358,6 +1676,11 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (event.eventType === 'incoming') {
       if (this.selectedConversation && this.normalizePhone(this.selectedConversation.phoneNumber) === eventPhone) {
+        this.sessionState = 'active';
+        this.sessionInfo = {
+          lastIncomingAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        };
         this.markConversationAsRead(this.selectedConversation, true);
       } else {
         this.incrementUnreadForPhone(eventPhone);
@@ -1416,6 +1739,11 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   private sendAttachmentMessage(conversation: ChatConversation, text: string): void {
     const attachments = [...this.attachmentQueue];
     if (!attachments.length) {
+      return;
+    }
+
+    if (!this.isSessionActive) {
+      this.openTemplateModal();
       return;
     }
 
@@ -1504,7 +1832,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
             this.sendAttachmentBatch(conversation, attachments, pendingIds, captionText, index + 1);
           },
-          error: () => {
+          error: (error: unknown) => {
+            if (this.handleSessionExpiredError(error)) {
+              this.removePendingMessage(localPendingId);
+              this.isSending = false;
+              this.isUploadingAttachment = false;
+              this.uploadProgress = 0;
+              return;
+            }
             this.markPendingMessageFailed(localPendingId);
             this.sendAttachmentBatch(conversation, attachments, pendingIds, captionText, index + 1);
           },
@@ -1651,6 +1986,11 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       };
     });
 
+    this.messages = this.mergePendingMessages(this.messages);
+  }
+
+  private removePendingMessage(localPendingId: string): void {
+    this.pendingMessages = this.pendingMessages.filter((message) => message.messageId !== localPendingId);
     this.messages = this.mergePendingMessages(this.messages);
   }
 

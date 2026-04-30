@@ -462,6 +462,95 @@
   padding: 8px;
 }
 
+.template-search-row {
+  margin-bottom: 8px;
+}
+
+.template-search-field {
+  margin-bottom: 0;
+}
+
+.template-category-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.template-category-chip {
+  border: 1px solid #d1d9e0;
+  background: #fff;
+  color: #334155;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &.active {
+    background: #ecfdf3;
+    border-color: #86efac;
+    color: #166534;
+  }
+}
+
+.template-list {
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background: #f8fafc;
+}
+
+.template-item {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  &.active {
+    background: #dcfce7;
+  }
+}
+
+.template-item-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.template-item-meta {
+  font-size: 11px;
+  color: #475569;
+}
+
+.template-empty {
+  padding: 10px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.template-variables {
+  margin-bottom: 10px;
+}
+
+.template-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
 .template-field {
   display: flex;
   flex-direction: column;
@@ -600,6 +689,32 @@
     radial-gradient(circle at center, rgba(203, 196, 186, 0.14) 1px, transparent 1px),
     linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
   background-size: auto, 22px 22px, auto;
+}
+
+.session-expired-notice {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inline-template-action {
+  border: 0;
+  border-radius: 999px;
+  background: #be123c;
+  color: #fff;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .attachment-compose-overlay {
