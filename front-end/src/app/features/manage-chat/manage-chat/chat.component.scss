@@ -168,9 +168,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #ef4444;
-  color: #fff;
+  background: #e8f7f3;
+  color: #0f766e;
   font-size: 11px;
+  font-weight: 700;
 }
 
 .conversation-list,
@@ -187,7 +188,7 @@
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 6px 9px;
   margin-bottom: 0;
   border: 0;
@@ -201,7 +202,7 @@
   &::after {
     content: '';
     position: absolute;
-    left: 54px;
+    left: 56px;
     right: 8px;
     bottom: 0;
     border-bottom: 1px solid #eef2f5;
@@ -212,8 +213,8 @@
   }
 
   &.active {
-    background: #e7f3ef;
-    box-shadow: inset 2px 0 0 #00a884;
+    background: #f3f7f6;
+    box-shadow: inset 1px 0 0 #00a884;
 
     &::after {
       border-bottom-color: transparent;
@@ -222,15 +223,21 @@
 
   &.unread {
     .conversation-copy h3,
-    .conversation-copy p,
     .conversation-row time {
       font-weight: 700;
       color: #1f2937;
     }
 
     .conversation-copy p {
-      color: #334155;
+      color: #475569;
+      font-weight: 500;
     }
+  }
+
+  &.active .conversation-unread {
+    opacity: 0;
+    transform: scale(0.92);
+    pointer-events: none;
   }
 }
 
@@ -273,8 +280,8 @@
 
   p {
     margin-top: 1px;
-    color: #54656f;
-    font-size: 11px;
+    color: #5f6d7a;
+    font-size: 10.5px;
     line-height: 1.25;
     white-space: nowrap;
     overflow: hidden;
@@ -304,23 +311,28 @@
 
 .conversation-right-meta {
   display: inline-flex;
-  align-items: flex-start;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
   flex-shrink: 0;
 }
 
 .conversation-unread {
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
   border-radius: 999px;
-  background: #00a884;
+  background: #d9fdd3;
+  border: 1px solid #a7e6c8;
+  margin-top: 1px;
   color: #fff;
-  font-size: 11px;
+  color: #0f766e;
+  font-size: 10px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .chat-panel {
