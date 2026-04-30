@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+const axios = require('axios');
 const { sendGupshupTextMessage, sendGupshupFileMessage, sendGupshupTemplateMessage } = require('../services/gupshupApiService');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
@@ -15,6 +18,103 @@ const { emitChatUpdate } = require('../services/socketService');
 const { resolveClientIdByPhone } = require('../services/activityHistoryService');
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+
+const getPublicBaseUrl = () => {
+  if (process.env.PUBLIC_BASE_URL) {
+    return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
+  }
+
+  return 'https://api.mukundhaassociates.com';
+};
+
+const safeFileName = (name) => String(name || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+
+const resolveAttachmentFilename = (attachmentUrl, attachmentFilename, attachmentMimeType) => {
+  const candidateName = String(attachmentFilename || '').trim();
+  if (candidateName) {
+    return candidateName;
+  }
+
+  const fromQuery = (() => {
+    try {
+      const parsed = new URL(String(attachmentUrl || ''));
+      return String(parsed.searchParams.get('fileName') || '').trim();
+    } catch (_error) {
+      return '';
+    }
+  })();
+
+  if (fromQuery) {
+    return fromQuery;
+  }
+
+  const mime = String(attachmentMimeType || '').toLowerCase();
+  const extension = mime.includes('pdf')
+    ? '.pdf'
+    : mime.includes('jpeg') || mime.includes('jpg')
+      ? '.jpg'
+      : mime.includes('png')
+        ? '.png'
+        : mime.includes('msword') || mime.includes('wordprocessingml')
+          ? '.docx'
+          : mime.includes('spreadsheetml') || mime.includes('ms-excel')
+            ? '.xlsx'
+            : '.bin';
+
+  return `attachment-${Date.now()}${extension}`;
+};
+
+const mirrorIncomingAttachmentUrl = async (attachmentUrl, attachmentFilename, attachmentMimeType) => {
+  const normalizedUrl = String(attachmentUrl || '').trim();
+  if (!normalizedUrl) {
+    return { fileUrl: '', filename: attachmentFilename || '' };
+  }
+
+  if (/\/uploads\//i.test(normalizedUrl)) {
+    return {
+      fileUrl: normalizedUrl,
+      filename: String(attachmentFilename || '').trim(),
+    };
+  }
+
+  try {
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const resolvedName = resolveAttachmentFilename(normalizedUrl, attachmentFilename, attachmentMimeType);
+    const ext = path.extname(resolvedName || '') || '';
+    const base = path.basename(resolvedName || 'attachment', ext);
+    const storedName = `${Date.now()}-${safeFileName(base)}${safeFileName(ext)}`;
+    const destinationPath = path.join(uploadsDir, storedName);
+
+    const response = await axios.get(normalizedUrl, {
+      responseType: 'stream',
+      timeout: 30000,
+      maxRedirects: 5,
+      validateStatus: (status) => status >= 200 && status < 300,
+    });
+
+    await new Promise((resolve, reject) => {
+      const writer = fs.createWriteStream(destinationPath);
+      response.data.pipe(writer);
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+
+    const baseUrl = getPublicBaseUrl();
+    return {
+      fileUrl: `${baseUrl}/uploads/${encodeURIComponent(storedName)}`,
+      filename: resolvedName,
+    };
+  } catch (_error) {
+    return {
+      fileUrl: normalizedUrl,
+      filename: String(attachmentFilename || '').trim(),
+    };
+  }
+};
 
 const isSessionActiveForPhone = async (phoneNumber) => {
   const normalizedPhone = normalizePhone(phoneNumber);
@@ -310,7 +410,7 @@ exports.processGupshupWebhook = async (body) => {
     nestedPayload?.file?.link ||
     nestedPayload?.file?.url ||
     '';
-  const attachmentFilename =
+  let attachmentFilename =
     payload.filename ||
     payloadImage.filename ||
     payloadDocument.filename ||
@@ -401,12 +501,21 @@ exports.processGupshupWebhook = async (body) => {
       return null;
     }
 
+    let persistedAttachmentUrl = attachmentUrl;
+    if (attachmentUrl) {
+      const mirrored = await mirrorIncomingAttachmentUrl(attachmentUrl, attachmentFilename, attachmentMimeType);
+      persistedAttachmentUrl = mirrored.fileUrl || attachmentUrl;
+      if (!attachmentFilename && mirrored.filename) {
+        attachmentFilename = mirrored.filename;
+      }
+    }
+
     const saved = await saveMessage({
       messageId: messageId || `incoming-${Date.now()}`,
       phone,
       text: displayText,
       type: isKnownMediaType || attachmentUrl ? 'file' : 'text',
-      fileUrl: attachmentUrl,
+      fileUrl: persistedAttachmentUrl,
       filename: attachmentFilename,
       mimeType: resolvedMimeType,
       direction: isFromBusiness ? 'out' : 'in',
