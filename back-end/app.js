@@ -45,7 +45,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
-app.options('*', cors());
+app.options('/{*path}', cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
