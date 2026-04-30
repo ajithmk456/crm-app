@@ -117,18 +117,23 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════ Add / Edit Modal -->
-<div class="modal-overlay" *ngIf="isModalOpen">
-  <div class="client-modal">
+<!-- ═══════════════════════════════════════════════════════════ Add / Edit Drawer -->
+<div class="drawer-overlay" *ngIf="isModalOpen" (click)="closeModal()"></div>
 
-    <div class="modal-header">
+<div class="drawer-container" [class.drawer-open]="isModalOpen">
+  <div class="drawer-content" (click)="$event.stopPropagation()">
+
+    <div class="drawer-header">
       <h3>
         <i class="fas" [ngClass]="isEditMode ? 'fa-user-edit' : 'fa-user-plus'"></i>
         {{ isEditMode ? 'Edit Client' : 'Add Client' }}
       </h3>
-      <button class="close-btn" (click)="closeModal()"><i class="fas fa-times"></i></button>
+      <button class="close-btn" (click)="closeModal()" aria-label="Close drawer">
+        <i class="fas fa-times"></i>
+      </button>
     </div>
 
-    <div class="modal-body">
+    <div class="drawer-body">
       <form [formGroup]="clientForm">
 
         <div class="form-row">
@@ -203,7 +208,7 @@
       </form>
     </div>
 
-    <div class="modal-footer">
+    <div class="drawer-footer">
       <button class="btn-cancel" (click)="closeModal()">Cancel</button>
       <button class="btn-save" (click)="saveClient()" [disabled]="isSaving">
         <i class="fas fa-spinner fa-spin" *ngIf="isSaving"></i>
