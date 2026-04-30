@@ -370,10 +370,6 @@ exports.processGupshupWebhook = async (body) => {
     nestedPayload.caption ||
     '';
   const attachmentUrlCandidate =
-    payload.url ||
-    payload.link ||
-    payload.originalUrl ||
-    payload.previewUrl ||
     payloadImage.url ||
     payloadImage.link ||
     payloadImage.originalUrl ||
@@ -392,10 +388,6 @@ exports.processGupshupWebhook = async (body) => {
     payloadFile.previewUrl ||
     payload?.file?.link ||
     payload?.file?.url ||
-    nestedPayload.url ||
-    nestedPayload.link ||
-    nestedPayload.originalUrl ||
-    nestedPayload.previewUrl ||
     nestedPayload?.image?.url ||
     nestedPayload?.image?.link ||
     nestedPayload?.image?.originalUrl ||
