@@ -319,6 +319,7 @@ exports.processGupshupWebhook = async (body) => {
   const eventType = String(body?.type || '').toLowerCase();
   const businessSource = normalizePhone(process.env.GUPSHUP_SOURCE || '916384322139');
   const payloadType = String(payload.type || nestedPayload.type || '').toLowerCase();
+  const mediaPayloadTypes = new Set(['image', 'file', 'document', 'video', 'audio', 'sticker']);
   const rawStatus = payload.status || nestedPayload.status || payload.eventType || nestedPayload.eventType || payloadType;
   const hasExplicitStatus = ['sent', 'submitted', 'enqueued', 'queued', 'delivered', 'read', 'failed'].includes(String(rawStatus || '').toLowerCase());
 
@@ -368,7 +369,7 @@ exports.processGupshupWebhook = async (body) => {
     nestedPayload.message ||
     nestedPayload.caption ||
     '';
-  const attachmentUrl =
+  const attachmentUrlCandidate =
     payload.url ||
     payload.link ||
     payload.originalUrl ||
@@ -453,13 +454,28 @@ exports.processGupshupWebhook = async (body) => {
     nestedPayload?.file?.mimeType ||
     nestedPayload?.file?.mimetype ||
     '';
+  const hasStructuredMediaUrl = Boolean(
+    payloadImage.url || payloadImage.link || payloadImage.originalUrl || payloadImage.previewUrl ||
+    payloadDocument.url || payloadDocument.link || payloadDocument.originalUrl || payloadDocument.previewUrl ||
+    payloadMedia.url || payloadMedia.link || payloadMedia.originalUrl || payloadMedia.previewUrl ||
+    payloadFile.url || payloadFile.link || payloadFile.originalUrl || payloadFile.previewUrl ||
+    nestedPayload?.image?.url || nestedPayload?.image?.link || nestedPayload?.image?.originalUrl || nestedPayload?.image?.previewUrl ||
+    nestedPayload?.document?.url || nestedPayload?.document?.link || nestedPayload?.document?.originalUrl || nestedPayload?.document?.previewUrl ||
+    nestedPayload?.media?.url || nestedPayload?.media?.link || nestedPayload?.media?.originalUrl || nestedPayload?.media?.previewUrl ||
+    nestedPayload?.file?.url || nestedPayload?.file?.link
+  );
+  const hasMediaHints = mediaPayloadTypes.has(payloadType)
+    || Boolean(attachmentFilename)
+    || Boolean(attachmentMimeType)
+    || hasStructuredMediaUrl;
+  const attachmentUrl = hasMediaHints ? attachmentUrlCandidate : '';
 
   // Derive messageType early so we can fall back mimeType for images
   const messageType = String(
     payload.type || nestedPayload.type || (attachmentUrl ? 'file' : 'text')
   ).toLowerCase();
   const resolvedMimeType = attachmentMimeType || (messageType === 'image' ? 'image/jpeg' : '');
-  const isKnownMediaType = ['image', 'file', 'document', 'video', 'audio', 'sticker'].includes(messageType);
+  const isKnownMediaType = mediaPayloadTypes.has(messageType);
   const displayText = text || attachmentFilename || (isMediaType ? normalizedPayloadType : '');
   const reason = payload.reason || nestedPayload.reason || '';
   const eventTimestamp = payload.timestamp || nestedPayload.timestamp || new Date();
