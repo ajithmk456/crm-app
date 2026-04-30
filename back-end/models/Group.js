@@ -21,6 +21,17 @@ const groupSchema = new mongoose.Schema(
         message: 'Group contacts cannot exceed 1000',
       },
     },
+    clients: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: 'Client',
+      default: [],
+      validate: {
+        validator: function (v) {
+          return v.length <= 1000;
+        },
+        message: 'Group clients cannot exceed 1000',
+      },
+    },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { timestamps: true }

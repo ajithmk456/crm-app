@@ -6,6 +6,7 @@ const {
   getGroupById,
   updateGroup,
   deleteGroup,
+  assignClientsToGroup,
 } = require('../controllers/groupController');
 const { protect } = require('../middleware/authMiddleware');
 const { authorizeRole } = require('../middleware/roleMiddleware');
@@ -160,5 +161,37 @@ router.put('/:id', protect, authorizeRole('admin'), updateGroup);
  *         description: Group deleted
  */
 router.delete('/:id', protect, authorizeRole('admin'), deleteGroup);
+
+/**
+ * @openapi
+ * /api/groups/{id}/assign-clients:
+ *   post:
+ *     tags:
+ *       - Group
+ *     summary: Assign clients to a group (Admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               clientIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Clients assigned
+ */
+router.post('/:id/assign-clients', protect, authorizeRole('admin'), assignClientsToGroup);
 
 module.exports = router;

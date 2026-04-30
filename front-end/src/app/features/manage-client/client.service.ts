@@ -9,6 +9,7 @@ export interface Client {
   alternateMobile?: string;
   whatsappOptIn: boolean;
   notes?: string;
+  groups?: (string | { _id?: string; name: string })[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -72,5 +73,9 @@ export class ClientService {
 
   getClientChats(id: string): Observable<{ success: boolean; data: any[] }> {
     return this.http.get<{ success: boolean; data: any[] }>(`/api/clients/${id}/chats`);
+  }
+
+  assignGroupsToClient(clientId: string, groupIds: string[]): Observable<ClientResponse> {
+    return this.http.post<ClientResponse>(`/api/clients/${clientId}/assign-groups`, { groupIds });
   }
 }

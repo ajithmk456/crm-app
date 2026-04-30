@@ -52,13 +52,14 @@
           <th>Mobile</th>
           <th>Alternate</th>
           <th>WhatsApp Opt-in</th>
+          <th>Groups</th>
           <th>Created</th>
           <th class="text-center">Actions</th>
         </tr>
       </thead>
       <tbody>
         <tr *ngIf="clients.length === 0">
-          <td colspan="7" class="empty-state">
+          <td colspan="8" class="empty-state">
             <i class="fas fa-users"></i>
             <span>No clients found</span>
           </td>
@@ -73,6 +74,12 @@
               <i class="fab fa-whatsapp" *ngIf="client.whatsappOptIn"></i>
               {{ client.whatsappOptIn ? 'Opted In' : 'Opted Out' }}
             </span>
+          </td>
+          <td>
+            <span class="groups-badge" *ngIf="client.groups && client.groups.length > 0">
+              {{ client.groups.length }} group{{ client.groups.length !== 1 ? 's' : '' }}
+            </span>
+            <span class="no-groups" *ngIf="!client.groups || client.groups.length === 0">—</span>
           </td>
           <td>{{ client.createdAt | date: 'dd MMM yyyy' }}</td>
           <td class="text-center actions-cell">
@@ -170,6 +177,26 @@
           <div class="input-with-icon">
             <i class="fas fa-sticky-note"></i>
             <textarea placeholder="Optional notes..." formControlName="notes" rows="3"></textarea>
+          </div>
+        </div>
+
+        <div class="form-group full-width">
+          <label>Assign to Groups</label>
+          <div class="groups-selection">
+            <div class="groups-list">
+              <label *ngFor="let group of groups" class="checkbox-label">
+                <input
+                  type="checkbox"
+                  [checked]="isGroupSelected(group._id || '')"
+                  (change)="toggleGroupSelection(group._id || '')"
+                />
+                <span class="checkbox-text">{{ group.name }}</span>
+              </label>
+            </div>
+            <div class="selected-groups" *ngIf="getSelectedGroupNames() !== 'No groups selected'">
+              <span class="selected-label">Selected:</span>
+              <span class="selected-list">{{ getSelectedGroupNames() }}</span>
+            </div>
           </div>
         </div>
 

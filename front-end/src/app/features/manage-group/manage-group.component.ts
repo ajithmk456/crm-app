@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { GroupService, Group, GroupContact } from './group.service';
+import { ClientService, Client } from '../manage-client/client.service';
 import { ToastrService } from 'ngx-toastr';
 
 @Component({
@@ -16,7 +17,9 @@ export class ManageGroupComponent implements OnInit {
   contactInput = '';
   contactInputError = '';
   numbers: string[] = [];
+  selectedClients: string[] = [];
   groups: Group[] = [];
+  clients: Client[] = [];
   editingIndex: number | null = null;
   editingGroupId: string | null = null;
   selectedGroupId: string | null = null;
@@ -26,15 +29,37 @@ export class ManageGroupComponent implements OnInit {
   deleteGroupId: string | null = null;
   isLoading = false;
   isSaving = false;
-  private pendingCreatedGroup: { name: string; numbers: string[] } | null = null;
+  isLoadingClients = false;
+  private pendingCreatedGroup: { name: string; numbers: string[]; clients: string[] } | null = null;
 
   constructor(
     private groupService: GroupService,
+    private clientService: ClientService,
     private toastr: ToastrService
   ) {}
 
   ngOnInit(): void {
+    this.loadClients();
     this.loadGroups();
+  }
+
+  /**
+   * Load all clients from API
+   */
+  loadClients(): void {
+    this.isLoadingClients = true;
+    this.clientService.getClients({ limit: 1000 }).subscribe({
+      next: (response) => {
+        if (response.success) {
+          this.clients = response.data;
+        }
+        this.isLoadingClients = false;
+      },
+      error: () => {
+        this.toastr.error('Failed to load clients');
+        this.isLoadingClients = false;
+      }
+    });
   }
 
   /**
@@ -163,8 +188,9 @@ export class ManageGroupComponent implements OnInit {
       return;
     }
 
-    if (this.numbers.length === 0) {
-      this.toastr.error('At least one contact is required');
+    // Allow either contacts OR clients
+    if (this.numbers.length === 0 && this.selectedClients.length === 0) {
+      this.toastr.error('At least one contact or client is required');
       return;
     }
 
@@ -176,7 +202,8 @@ export class ManageGroupComponent implements OnInit {
 
     const groupData = {
       name: this.groupName,
-      contacts
+      contacts,
+      clients: this.selectedClients
     };
 
     this.isSaving = true;
@@ -208,7 +235,8 @@ export class ManageGroupComponent implements OnInit {
             this.toastr.success('Group created successfully');
             this.pendingCreatedGroup = {
               name: groupData.name,
-              numbers: [...this.numbers]
+              numbers: [...this.numbers],
+              clients: [...this.selectedClients]
             };
             this.resetForm();
             this.loadGroups();
@@ -229,6 +257,8 @@ export class ManageGroupComponent implements OnInit {
   editGroup(group: Group): void {
     this.groupName = group.name;
     this.numbers = group.contacts.map(c => c.phone);
+    const clientIds = group.clients?.map(c => (typeof c === 'string' ? c : c._id || '')) || [];
+    this.selectedClients = clientIds;
     this.editingIndex = this.groups.findIndex((item) => item._id === group._id);
     this.editingGroupId = group._id || null;
     this.selectedGroupId = group._id || null;
@@ -240,10 +270,40 @@ export class ManageGroupComponent implements OnInit {
   resetForm(): void {
     this.groupName = '';
     this.numbers = [];
+    this.selectedClients = [];
     this.contactInput = '';
     this.contactInputError = '';
     this.editingIndex = null;
     this.editingGroupId = null;
+  }
+
+  /**
+   * Toggle client selection
+   */
+  toggleClientSelection(clientId: string): void {
+    if (this.selectedClients.includes(clientId)) {
+      this.selectedClients = this.selectedClients.filter(id => id !== clientId);
+    } else {
+      this.selectedClients.push(clientId);
+    }
+  }
+
+  /**
+   * Check if a client is selected
+   */
+  isClientSelected(clientId: string | undefined): boolean {
+    return clientId ? this.selectedClients.includes(clientId) : false;
+  }
+
+  /**
+   * Get selected clients names
+   */
+  getSelectedClientNames(): string {
+    if (this.selectedClients.length === 0) return 'No clients selected';
+    return this.clients
+      .filter(c => c._id && this.selectedClients.includes(c._id))
+      .map(c => c.name)
+      .join(', ');
   }
 
   get isFormValid(): boolean {

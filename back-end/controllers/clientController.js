@@ -1,4 +1,5 @@
 const Client = require('../models/Client');
+const Group = require('../models/Group');
 const multer = require('multer');
 const csv = require('csv-parse/sync');
 
@@ -51,7 +52,11 @@ exports.getClients = async (req, res, next) => {
     const sortOrder = sort === 'asc' ? 1 : -1;
 
     const [data, total] = await Promise.all([
-      Client.find(query).sort({ createdAt: sortOrder }).skip(skip).limit(limitNum),
+      Client.find(query)
+        .populate('groups', 'name')
+        .sort({ createdAt: sortOrder })
+        .skip(skip)
+        .limit(limitNum),
       Client.countDocuments(query),
     ]);
 
@@ -74,7 +79,7 @@ exports.getClients = async (req, res, next) => {
 
 exports.createClient = async (req, res, next) => {
   try {
-    const { name, mobile, alternateMobile, whatsappOptIn, notes } = req.body;
+    const { name, mobile, alternateMobile, whatsappOptIn, notes, groups } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Name is required.' });
@@ -90,15 +95,27 @@ exports.createClient = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Mobile number already exists.' });
     }
 
+    const groupIds = Array.isArray(groups) ? groups.filter((id) => id) : [];
+
     const client = await Client.create({
       name: name.trim(),
       mobile: formatted,
       alternateMobile: alternateMobile ? (formatMobile(alternateMobile) || alternateMobile.trim()) : '',
       whatsappOptIn: whatsappOptIn !== undefined ? Boolean(whatsappOptIn) : true,
       notes: notes ? notes.trim() : '',
+      groups: groupIds,
     });
 
-    res.status(201).json({ success: true, data: client });
+    // Sync group-client relationships
+    if (groupIds.length > 0) {
+      await Group.updateMany(
+        { _id: { $in: groupIds } },
+        { $addToSet: { clients: client._id } }
+      );
+    }
+
+    const populated = await Client.findById(client._id).populate('groups', 'name');
+    res.status(201).json({ success: true, data: populated });
   } catch (error) {
     if (error.code === 11000) {
       return res.status(400).json({ success: false, message: 'Mobile number already exists.' });
@@ -111,7 +128,7 @@ exports.createClient = async (req, res, next) => {
 
 exports.updateClient = async (req, res, next) => {
   try {
-    const { name, mobile, alternateMobile, whatsappOptIn, notes } = req.body;
+    const { name, mobile, alternateMobile, whatsappOptIn, notes, groups } = req.body;
     const update = {};
 
     if (name !== undefined) update.name = name.trim();
@@ -136,14 +153,43 @@ exports.updateClient = async (req, res, next) => {
     }
     if (whatsappOptIn !== undefined) update.whatsappOptIn = Boolean(whatsappOptIn);
     if (notes !== undefined) update.notes = notes.trim();
+    if (groups !== undefined) {
+      const groupIds = Array.isArray(groups) ? groups.filter((id) => id) : [];
+      update.groups = groupIds;
+    }
 
     const client = await Client.findByIdAndUpdate(req.params.id, update, {
       new: true,
       runValidators: true,
-    });
+    }).populate('groups', 'name');
 
     if (!client) {
       return res.status(404).json({ success: false, message: 'Client not found.' });
+    }
+
+    // Sync groups if groups were updated
+    if (groups !== undefined) {
+      const oldClient = await Client.findById(req.params.id);
+      const oldGroupIds = (oldClient?.groups || []).map((id) => String(id));
+      const newGroupIds = update.groups.map((id) => String(id));
+
+      // Groups to add
+      const toAdd = newGroupIds.filter((id) => !oldGroupIds.includes(id));
+      if (toAdd.length > 0) {
+        await Group.updateMany(
+          { _id: { $in: toAdd } },
+          { $addToSet: { clients: req.params.id } }
+        );
+      }
+
+      // Groups to remove
+      const toRemove = oldGroupIds.filter((id) => !newGroupIds.includes(id));
+      if (toRemove.length > 0) {
+        await Group.updateMany(
+          { _id: { $in: toRemove } },
+          { $pull: { clients: req.params.id } }
+        );
+      }
     }
 
     res.json({ success: true, data: client });
@@ -163,7 +209,59 @@ exports.deleteClient = async (req, res, next) => {
     if (!client) {
       return res.status(404).json({ success: false, message: 'Client not found.' });
     }
+
+    // Remove client from all groups
+    await Group.updateMany(
+      { clients: client._id },
+      { $pull: { clients: client._id } }
+    );
+
     res.json({ success: true, message: 'Client deleted.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/clients/:id/assign-groups
+ * Assign groups to a client
+ */
+exports.assignGroupsToClient = async (req, res, next) => {
+  try {
+    const { groupIds } = req.body;
+    const client = await Client.findById(req.params.id);
+    if (!client) {
+      return res.status(404).json({ success: false, message: 'Client not found.' });
+    }
+
+    const validGroupIds = Array.isArray(groupIds) ? groupIds.filter((id) => id) : [];
+
+    // Get old group IDs
+    const oldGroupIds = (client.groups || []).map((id) => String(id));
+
+    // Groups to add
+    const toAdd = validGroupIds.filter((id) => !oldGroupIds.includes(String(id)));
+    if (toAdd.length > 0) {
+      await Group.updateMany(
+        { _id: { $in: toAdd } },
+        { $addToSet: { clients: client._id } }
+      );
+    }
+
+    // Groups to remove
+    const toRemove = oldGroupIds.filter((id) => !validGroupIds.includes(id));
+    if (toRemove.length > 0) {
+      await Group.updateMany(
+        { _id: { $in: toRemove } },
+        { $pull: { clients: client._id } }
+      );
+    }
+
+    client.groups = validGroupIds;
+    await client.save();
+
+    const updated = await Client.findById(client._id).populate('groups', 'name');
+    res.json({ success: true, data: updated });
   } catch (error) {
     next(error);
   }

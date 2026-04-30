@@ -4,6 +4,7 @@ import { FormsModule, FormBuilder, ReactiveFormsModule, Validators, AbstractCont
 import { Router } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
 import { ClientService, Client } from '../client.service';
+import { GroupService, Group } from '../../manage-group/group.service';
 
 @Component({
   selector: 'app-manage-client',
@@ -15,6 +16,7 @@ import { ClientService, Client } from '../client.service';
 export class ManageClientComponent implements OnInit {
   // ─── State ──────────────────────────────────────────────────────────────────
   clients: Client[] = [];
+  groups: Group[] = [];
   isLoading = false;
   isSaving = false;
 
@@ -46,17 +48,33 @@ export class ManageClientComponent implements OnInit {
     alternateMobile: ['', [Validators.pattern(/^(\+91)?[6-9]\d{9}$/)]],
     whatsappOptIn: [true],
     notes: [''],
+    groups: [[] as string[]],
   });
 
   constructor(
     private fb: FormBuilder,
     private clientService: ClientService,
+    private groupService: GroupService,
     private toastr: ToastrService,
     private router: Router
   ) {}
 
   ngOnInit(): void {
+    this.loadGroups();
     this.loadClients();
+  }
+
+  // ─── Load Groups ────────────────────────────────────────────────────────────────
+
+  loadGroups(): void {
+    this.groupService.getGroups().subscribe({
+      next: (res) => {
+        if (res.success && res.data) {
+          this.groups = Array.isArray(res.data) ? res.data : [res.data];
+        }
+      },
+      error: () => this.toastr.error('Failed to load groups', 'Error'),
+    });
   }
 
   // ─── Load ────────────────────────────────────────────────────────────────────
@@ -125,26 +143,28 @@ export class ManageClientComponent implements OnInit {
   openAddModal(): void {
     this.isEditMode = false;
     this.selectedClientId = null;
-    this.clientForm.reset({ whatsappOptIn: true });
+    this.clientForm.reset({ whatsappOptIn: true, groups: [] });
     this.isModalOpen = true;
   }
 
   openEditModal(client: Client): void {
     this.isEditMode = true;
     this.selectedClientId = client._id || null;
+    const groupIds = client.groups?.map((g) => (typeof g === 'string' ? g : g._id || '')) || [];
     this.clientForm.setValue({
       name: client.name,
       mobile: client.mobile,
       alternateMobile: client.alternateMobile || '',
       whatsappOptIn: client.whatsappOptIn,
       notes: client.notes || '',
+      groups: groupIds,
     });
     this.isModalOpen = true;
   }
 
   closeModal(): void {
     this.isModalOpen = false;
-    this.clientForm.reset({ whatsappOptIn: true });
+    this.clientForm.reset({ whatsappOptIn: true, groups: [] });
   }
 
   saveClient(): void {
@@ -155,7 +175,15 @@ export class ManageClientComponent implements OnInit {
     }
 
     this.isSaving = true;
-    const value = this.clientForm.value as Omit<Client, '_id' | 'createdAt' | 'updatedAt'>;
+    const formValue = this.clientForm.value;
+    const value = {
+      name: formValue.name || '',
+      mobile: formValue.mobile || '',
+      alternateMobile: formValue.alternateMobile || '',
+      whatsappOptIn: formValue.whatsappOptIn || true,
+      notes: formValue.notes || '',
+      groups: formValue.groups || [],
+    } as Omit<Client, '_id' | 'createdAt' | 'updatedAt'>;
 
     if (this.isEditMode && this.selectedClientId) {
       this.clientService.updateClient(this.selectedClientId, value).subscribe({
@@ -280,5 +308,29 @@ export class ManageClientComponent implements OnInit {
   hasError(control: string, error: string): boolean {
     const c = this.clientForm.get(control) as AbstractControl;
     return c?.touched && c?.hasError(error);
+  }
+
+  toggleGroupSelection(groupId: string): void {
+    const groupsControl = this.clientForm.get('groups') as any;
+    const currentGroups = groupsControl.value || [];
+    if (currentGroups.includes(groupId)) {
+      groupsControl.setValue(currentGroups.filter((id: string) => id !== groupId));
+    } else {
+      groupsControl.setValue([...currentGroups, groupId]);
+    }
+  }
+
+  isGroupSelected(groupId: string): boolean {
+    const groupsControl = this.clientForm.get('groups') as any;
+    return (groupsControl.value || []).includes(groupId);
+  }
+
+  getSelectedGroupNames(): string {
+    const groupsControl = this.clientForm.get('groups') as any;
+    const selectedIds = groupsControl.value || [];
+    return this.groups
+      .filter((g) => selectedIds.includes(g._id))
+      .map((g) => g.name)
+      .join(', ') || 'No groups selected';
   }
 }

@@ -8,6 +8,7 @@ const {
   bulkUpload,
   csvUpload,
   getClientChats,
+  assignGroupsToClient,
 } = require('../controllers/clientController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -140,5 +141,35 @@ router.route('/:id').put(protect, updateClient).delete(protect, deleteClient);
  *         description: OK
  */
 router.get('/:id/chats', protect, getClientChats);
+
+/**
+ * @openapi
+ * /api/clients/{id}/assign-groups:
+ *   post:
+ *     tags: [Clients]
+ *     summary: Assign groups to a client
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               groupIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Groups assigned
+ */
+router.post('/:id/assign-groups', protect, assignGroupsToClient);
 
 module.exports = router;

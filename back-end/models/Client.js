@@ -13,6 +13,11 @@ const clientSchema = new mongoose.Schema(
     alternateMobile: { type: String, default: '', trim: true },
     whatsappOptIn: { type: Boolean, default: true },
     notes: { type: String, default: '' },
+    groups: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: 'Group',
+      default: [],
+    },
   },
   { timestamps: true }
 );

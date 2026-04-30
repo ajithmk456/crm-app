@@ -110,7 +110,30 @@
         </div>
       </div>
 
-      <!-- SAVE BUTTON -->
+      <!-- Assign Clients -->
+      <div class="form-group">
+        <label>Assign Clients (Optional)</label>
+        <div class="clients-selection">
+          <div class="clients-list" *ngIf="clients.length > 0">
+            <label *ngFor="let client of clients" class="checkbox-label">
+              <input
+                type="checkbox"
+                [checked]="isClientSelected(client._id)"
+                (change)="toggleClientSelection(client._id || '')"
+              />
+              <span class="checkbox-text">{{ client.name }}</span>
+              <span class="client-mobile">{{ client.mobile }}</span>
+            </label>
+          </div>
+          <div *ngIf="clients.length === 0" class="no-clients-message">
+            <p>No clients available. Create clients first.</p>
+          </div>
+          <div class="selected-clients" *ngIf="getSelectedClientNames() !== 'No clients selected'">
+            <span class="selected-label">Selected:</span>
+            <span class="selected-list">{{ getSelectedClientNames() }}</span>
+          </div>
+        </div>
+      </div>
       <div class="action-section">
         <button class="btn-save"
                 [disabled]="!isFormValid || isSaving"
