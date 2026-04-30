@@ -772,6 +772,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   isFileMessage(message: PendingMessage): boolean {
+    const msgType = String((message as any).type || '').toLowerCase();
+    const mediaTypes = ['image', 'file', 'document', 'video', 'audio', 'sticker'];
+    if (mediaTypes.includes(msgType)) {
+      return true;
+    }
+
     const fileUrl = String(message.fileUrl || '').trim();
     const fileName = String(message.filename || '').trim().toLowerCase();
     const mimeType = String(message.mimeType || '').trim().toLowerCase();
@@ -796,8 +802,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     const mimeType = String(message.mimeType || '').toLowerCase();
     const fileUrl = String(message.fileUrl || '').toLowerCase();
     const fallbackText = String(message.text || '').toLowerCase();
+    const msgType = String((message as any).type || '').toLowerCase();
     return (
-      mimeType.startsWith('image/')
+      msgType === 'image'
+      || mimeType.startsWith('image/')
       || /\.(png|jpe?g|gif|webp)$/i.test(fileName)
       || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(fileUrl)
       || fallbackText === 'image'
