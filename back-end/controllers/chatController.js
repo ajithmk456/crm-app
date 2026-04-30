@@ -9,6 +9,7 @@ const {
   getConversationSummaries,
   normalizePhone,
   normalizeStatus,
+  markConversationAsRead,
 } = require('../services/chatMessageStore');
 const { emitChatUpdate } = require('../services/socketService');
 const { resolveClientIdByPhone } = require('../services/activityHistoryService');
@@ -515,6 +516,7 @@ exports.getChatConversations = async (req, res, next) => {
       return {
         ...item,
         clientName: matchedName,
+        unreadCount: Number(item.unreadCount || 0),
         updatedAt: new Date(item.updatedAt).toISOString(),
       };
     });
@@ -522,6 +524,39 @@ exports.getChatConversations = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: conversations,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/chat/:phone/read
+// Marks a conversation as read and resets unread count.
+exports.markConversationRead = async (req, res, next) => {
+  try {
+    const phone = req.params.phone;
+    if (!phone) {
+      return res.status(400).json({ success: false, message: 'phone is required.' });
+    }
+
+    const updatedConversation = await markConversationAsRead(phone);
+    if (!updatedConversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found.' });
+    }
+
+    emitChatUpdate({
+      eventType: 'read',
+      phone: normalizePhone(phone),
+      status: 'read',
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        phoneNumber: updatedConversation.phoneNumber,
+        unreadCount: Number(updatedConversation.unreadCount || 0),
+        lastReadAt: updatedConversation.lastReadAt || null,
+      },
     });
   } catch (error) {
     next(error);

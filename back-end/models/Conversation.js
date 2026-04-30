@@ -14,6 +14,15 @@ const conversationSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    unreadCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    lastReadAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

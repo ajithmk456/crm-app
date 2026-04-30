@@ -39,16 +39,27 @@ const buildPreviewText = (message) => {
   return String(message.filename || message.text || '').trim();
 };
 
-const findOrCreateConversation = async (phone, previewText = '') => {
+const findOrCreateConversation = async (phone, previewText = '', options = {}) => {
   if (!phone) {
     return null;
   }
 
+  const incrementUnreadBy = Math.max(0, Number(options.incrementUnreadBy || 0));
+
   const update = previewText ? { lastMessage: previewText } : {};
+  if (incrementUnreadBy > 0) {
+    update.$inc = { unreadCount: incrementUnreadBy };
+  }
+
+  const setPayload = { ...(previewText ? { lastMessage: previewText } : {}) };
+  if (Object.keys(setPayload).length) {
+    update.$set = setPayload;
+  }
+
   return Conversation.findOneAndUpdate(
     { phoneNumber: phone },
     {
-      $set: update,
+      ...update,
       $setOnInsert: { phoneNumber: phone },
     },
     {
@@ -142,12 +153,17 @@ const saveMessage = async (message) => {
   const previewText = buildPreviewText(normalized);
   const endpoints = buildDirectionalEndpoints(normalized);
   const phone = normalized.phone || endpoints.phone;
-  const conversation = await findOrCreateConversation(phone, previewText);
 
   if (normalized.messageId) {
     const existing = await Message.findOne({ messageId: normalized.messageId });
     if (existing) {
-      existing.conversationId = conversation?._id || existing.conversationId;
+      let existingConversationId = existing.conversationId;
+      if (!existingConversationId && phone) {
+        const existingConversation = await findOrCreateConversation(phone, previewText, { incrementUnreadBy: 0 });
+        existingConversationId = existingConversation?._id;
+      }
+
+      existing.conversationId = existingConversationId || existing.conversationId;
       existing.from = existing.from || endpoints.from;
       existing.to = existing.to || endpoints.to;
       existing.text = normalized.text || existing.text;
@@ -162,6 +178,10 @@ const saveMessage = async (message) => {
       return toMessageView(existing, phone);
     }
   }
+
+  const conversation = await findOrCreateConversation(phone, previewText, {
+    incrementUnreadBy: normalized.direction === 'in' ? 1 : 0,
+  });
 
   const created = await Message.create({
     messageId: normalized.messageId || `chat-${Date.now()}`,
@@ -264,14 +284,34 @@ const getMessagesByPhone = async (phone) => {
 };
 
 const getConversationSummaries = async () => {
-  const conversations = await Conversation.find({}).sort({ updatedAt: -1 }).lean();
+  const conversations = await Conversation.find({}).sort({ unreadCount: -1, updatedAt: -1 }).lean();
   return conversations.map((item) => ({
     _id: item.phoneNumber,
     phoneNumber: item.phoneNumber,
     lastMessage: item.lastMessage || '',
+    unreadCount: Number(item.unreadCount || 0),
+    lastReadAt: item.lastReadAt || null,
     updatedAt: item.updatedAt,
     createdAt: item.createdAt,
   }));
+};
+
+const markConversationAsRead = async (phone) => {
+  const normalizedPhone = normalizePhone(phone);
+  if (!normalizedPhone) {
+    return null;
+  }
+
+  return Conversation.findOneAndUpdate(
+    { phoneNumber: normalizedPhone },
+    {
+      $set: {
+        unreadCount: 0,
+        lastReadAt: new Date(),
+      },
+    },
+    { new: true }
+  ).lean();
 };
 
 module.exports = {
@@ -281,4 +321,5 @@ module.exports = {
   updateMessageStatus,
   getMessagesByPhone,
   getConversationSummaries,
+  markConversationAsRead,
 };

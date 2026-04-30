@@ -1,5 +1,12 @@
 const express = require('express');
-const { sendChatMessage, sendChatFile, sendChatTemplate, getChatByPhone, getChatConversations } = require('../controllers/chatController');
+const {
+	sendChatMessage,
+	sendChatFile,
+	sendChatTemplate,
+	getChatByPhone,
+	getChatConversations,
+	markConversationRead,
+} = require('../controllers/chatController');
 
 const router = express.Router();
 
@@ -162,6 +169,25 @@ router.get('/conversations', getChatConversations);
  *       400:
  *         description: Missing or invalid phone number
  */
+
+/**
+ * @openapi
+ * /api/chat/{phone}/read:
+ *   post:
+ *     tags:
+ *       - Chat
+ *     summary: Mark a chat conversation as read
+ *     parameters:
+ *       - in: path
+ *         name: phone
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Conversation unread count reset
+ */
+router.post('/:phone/read', markConversationRead);
 
 // Fetches chat history for one phone number.
 router.get('/:phone', getChatByPhone);

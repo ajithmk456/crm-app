@@ -53,6 +53,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   selectedConversation: ChatConversation | null = null;
   messages: PendingMessage[] = [];
   searchTerm = '';
+  conversationFilter: 'all' | 'unread' = 'all';
   draftMessage = '';
   attachmentCaption = '';
   isLoadingConversations = false;
@@ -72,7 +73,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   showAttachmentMenu = false;
   showEmojiPicker = false;
   activeMessageMenuId: string | null = null;
+  socketConnected = false;
   readonly quickEmojis = ['😀', '😂', '😊', '😍', '👍', '🙏', '🔥', '🎉', '❤️', '✅', '📌', '👋'];
+  private readonly draftStorageKey = 'manage-chat-drafts-v1';
 
   private readonly destroy$ = new Subject<void>();
   private readonly selectedConversation$ = new Subject<string>();
@@ -221,6 +224,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   private forceScrollOnNextMessageUpdate = false;
   private targetConversationPhone = '';
   private hasSanitizedPhoneQueryParam = false;
+  private draftByConversationId: Record<string, string> = {};
+  private lastConversationFetchAt = 0;
 
   constructor(
     private readonly chatService: ChatService,
@@ -230,6 +235,20 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   ) {}
 
   ngOnInit(): void {
+    this.loadDraftCache();
+
+    this.chatService.onSocketConnectionState()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((connected) => {
+        this.socketConnected = connected;
+        if (connected) {
+          this.refreshConversationsFromApi();
+          if (this.selectedConversation) {
+            this.selectedConversation$.next(this.selectedConversation._id);
+          }
+        }
+      });
+
     const statePhone = this.normalizePhone(window.history.state?.targetPhone || '');
     if (statePhone) {
       this.targetConversationPhone = statePhone;
@@ -279,14 +298,25 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
   get filteredConversations(): ChatConversation[] {
     const term = this.searchTerm.trim().toLowerCase();
-    if (!term) {
-      return this.conversations;
-    }
 
     return this.conversations.filter((conversation) => {
+      if (this.conversationFilter === 'unread' && this.getUnreadCount(conversation._id) <= 0) {
+        return false;
+      }
+
+      if (!term) {
+        return true;
+      }
+
       return [conversation.clientName || '', conversation.phoneNumber, conversation.lastMessage]
         .some((value) => (value || '').toLowerCase().includes(term));
     });
+  }
+
+  get totalUnreadConversations(): number {
+    return this.conversations.reduce((count, conversation) => {
+      return count + (this.getUnreadCount(conversation._id) > 0 ? 1 : 0);
+    }, 0);
   }
 
   get activeConversationTitle(): string {
@@ -337,11 +367,16 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   selectConversation(conversation: ChatConversation): void {
-    if (this.selectedConversation?._id === conversation._id) {
+    const wasAlreadySelected = this.selectedConversation?._id === conversation._id;
+
+    this.selectedConversation = conversation;
+    this.draftMessage = this.draftByConversationId[conversation._id] || '';
+    this.markConversationAsRead(conversation, true);
+
+    if (wasAlreadySelected) {
       return;
     }
 
-    this.selectedConversation = conversation;
     this.pendingMessages = [];
     this.messages = [];
     this.isLoadingMessages = true;
@@ -349,6 +384,27 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     this.unreadNewMessages = 0;
     this.forceScrollOnNextMessageUpdate = true;
     this.selectedConversation$.next(conversation._id);
+  }
+
+  setConversationFilter(filter: 'all' | 'unread'): void {
+    this.conversationFilter = filter;
+  }
+
+  getUnreadCount(conversationId: string): number {
+    const conversation = this.conversations.find((item) => item._id === conversationId);
+    return Number(conversation?.unreadCount || 0);
+  }
+
+  onDraftChanged(): void {
+    if (!this.selectedConversation) {
+      return;
+    }
+
+    this.draftByConversationId = {
+      ...this.draftByConversationId,
+      [this.selectedConversation._id]: this.draftMessage,
+    };
+    this.persistDraftCache();
   }
 
   sendMessage(): void {
@@ -372,6 +428,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.addOptimisticOutgoingMessage(text, selectedConversation, localPendingId);
     this.draftMessage = '';
+    this.onDraftChanged();
     this.syncSelectedConversationPreview(text, selectedConversation._id);
     this.queueScrollToBottom(true);
 
@@ -773,6 +830,67 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     this.activeFileViewerResourceUrl = null;
   }
 
+  async downloadFileMessage(message: PendingMessage): Promise<void> {
+    const fileUrl = String(message.fileUrl || '').trim();
+    if (!fileUrl) {
+      return;
+    }
+
+    await this.downloadFileFromUrl(fileUrl, String(message.filename || 'attachment'));
+  }
+
+  async downloadActiveViewerFile(): Promise<void> {
+    const viewer = this.activeFileViewer;
+    if (!viewer?.url) {
+      return;
+    }
+
+    await this.downloadFileFromUrl(viewer.url, String(viewer.name || 'attachment'));
+  }
+
+  private async downloadFileFromUrl(fileUrl: string, fileName: string): Promise<void> {
+    if (!fileUrl) {
+      return;
+    }
+
+    try {
+      const response = await fetch(fileUrl, { mode: 'cors' });
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = fileName || 'attachment';
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(fileUrl, '_blank', 'noopener');
+    }
+  }
+
+  getFileTypeLabel(message: PendingMessage): string {
+    const mimeType = String(message.mimeType || '').toLowerCase();
+    if (mimeType.includes('pdf')) {
+      return 'PDF';
+    }
+    if (mimeType.startsWith('image/')) {
+      return 'Image';
+    }
+    if (mimeType.includes('word')) {
+      return 'Word';
+    }
+    if (mimeType.includes('sheet') || mimeType.includes('excel')) {
+      return 'Spreadsheet';
+    }
+
+    return 'Attachment';
+  }
+
   getSelectedAttachmentIconClass(): string {
     const attachment = this.selectedAttachment;
     if (!attachment) {
@@ -843,9 +961,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private startConversationPolling(): void {
-    interval(4000).pipe(
+    interval(15000).pipe(
       startWith(0),
       switchMap(() => {
+        if (this.socketConnected && this.conversations.length) {
+          return of({ success: true, data: this.conversations });
+        }
+
         this.isLoadingConversations = !this.conversations.length;
         return this.chatService.getConversations().pipe(
           catchError(() => of({ success: false, data: [] as ChatConversation[] }))
@@ -867,9 +989,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       }
 
       const previousSelectionId = this.selectedConversation?._id;
-      this.conversations = [...conversationsToRender].sort((a, b) => {
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-      });
+      this.conversations = this.sortConversationsForInbox(conversationsToRender);
+      this.lastConversationFetchAt = Date.now();
 
       if (this.trySelectTargetConversation()) {
         return;
@@ -935,6 +1056,93 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
         return interval(4000).pipe(
           startWith(0),
           switchMap(() => {
+            if (this.socketConnected && this.messages.length) {
+              return of({ success: true, data: this.messages as ChatMessage[] });
+            }
+
+            this.isLoadingMessages = !this.messages.length;
+            return this.chatService.getMessages(conversationId).pipe(
+              catchError(() => of({ success: false, data: [] as ChatMessage[] }))
+            );
+          })
+        );
+      }),
+      takeUntil(this.destroy$)
+    ).subscribe((response) => {
+      this.isLoadingMessages = false;
+      if (!response.success) {
+        return;
+      }
+
+      const previousLastMessageId = this.messages[this.messages.length - 1]?.messageId || '';
+      this.messages = this.mergePendingMessages(this.withMockMetadata(response.data));
+      const nextLastMessageId = this.messages[this.messages.length - 1]?.messageId || '';
+      const hasNewTailMessage = Boolean(nextLastMessageId && nextLastMessageId !== previousLastMessageId);
+
+      if (this.forceScrollOnNextMessageUpdate) {
+        this.forceScrollOnNextMessageUpdate = false;
+        this.queueScrollToBottom(true);
+        return;
+      }
+
+      if (!hasNewTailMessage) {
+        return;
+      }
+
+      if (this.isNearBottom()) {
+        this.queueScrollToBottom();
+      } else {
+        this.unreadNewMessages += 1;
+        this.showScrollToBottomButton = true;
+      }
+    });
+  }
+
+  private refreshConversationsFromApi(force = false): void {
+    const minInterval = 1800;
+    if (!force && Date.now() - this.lastConversationFetchAt < minInterval) {
+      return;
+    }
+
+    this.chatService.getConversations()
+      .pipe(
+        catchError(() => of({ success: false, data: [] as ChatConversation[] })),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((response) => {
+        if (!response.success || !response.data.length) {
+          return;
+        }
+
+        this.lastConversationFetchAt = Date.now();
+        this.conversations = this.sortConversationsForInbox(response.data);
+
+        if (this.selectedConversation?._id) {
+          const refreshedSelection = this.conversations.find((item) => item._id === this.selectedConversation?._id) || null;
+          this.selectedConversation = refreshedSelection;
+        }
+      });
+  }
+
+  private startMessagePollingLegacy(): void {
+    this.selectedConversation$.pipe(
+      switchMap((conversationId) => {
+        if (this.isMockConversation(conversationId)) {
+          return interval(4000).pipe(
+            startWith(0),
+            switchMap(() => {
+              this.isLoadingMessages = !this.messages.length;
+              return of({
+                success: true,
+                data: [...(this.mockMessagesByConversation[conversationId] || [])],
+              });
+            })
+          );
+        }
+
+        return interval(4000).pipe(
+          startWith(0),
+          switchMap(() => {
             this.isLoadingMessages = !this.messages.length;
             return this.chatService.getMessages(conversationId).pipe(
               catchError(() => of({ success: false, data: [] as ChatMessage[] }))
@@ -982,14 +1190,27 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private handleRealtimeUpdate(event: RealtimeChatEvent): void {
+    this.refreshConversationsFromApi();
+
+    const eventPhone = this.normalizePhone(event.phone || event.destination || event.source || '');
+    if (!eventPhone) {
+      return;
+    }
+
+    if (event.eventType === 'incoming') {
+      if (this.selectedConversation && this.normalizePhone(this.selectedConversation.phoneNumber) === eventPhone) {
+        this.markConversationAsRead(this.selectedConversation, true);
+      } else {
+        this.incrementUnreadForPhone(eventPhone);
+      }
+    }
+
     if (!this.selectedConversation || this.isMockConversation(this.selectedConversation._id)) {
       return;
     }
 
     const selectedPhone = this.normalizePhone(this.selectedConversation.phoneNumber);
-    const eventPhone = this.normalizePhone(event.phone || event.destination || event.source || '');
-
-    if (!eventPhone || selectedPhone !== eventPhone) {
+    if (selectedPhone !== eventPhone) {
       return;
     }
 
@@ -1403,7 +1624,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private syncSelectedConversationPreview(text: string, conversationId: string): void {
-    this.conversations = this.conversations.map((conversation) => {
+    this.conversations = this.sortConversationsForInbox(this.conversations.map((conversation) => {
       if (conversation._id !== conversationId) {
         return conversation;
       }
@@ -1413,7 +1634,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
         lastMessage: text,
         updatedAt: new Date().toISOString(),
       };
-    }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    }));
 
     if (this.selectedConversation?._id === conversationId) {
       const refreshedSelection = this.conversations.find((conversation) => conversation._id === conversationId) || null;
@@ -1456,5 +1677,108 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
     return distanceFromBottom <= threshold;
+  }
+
+  private incrementUnreadForPhone(phone: string): void {
+    if (!phone) {
+      return;
+    }
+
+    this.conversations = this.sortConversationsForInbox(this.conversations.map((conversation) => {
+      if (this.normalizePhone(conversation.phoneNumber) !== phone) {
+        return conversation;
+      }
+
+      return {
+        ...conversation,
+        unreadCount: Number(conversation.unreadCount || 0) + 1,
+      };
+    }));
+  }
+
+  private markConversationAsRead(conversation: ChatConversation, optimistic = false): void {
+    if (!conversation?._id) {
+      return;
+    }
+
+    if (optimistic) {
+      this.conversations = this.conversations.map((item) => {
+        if (item._id !== conversation._id) {
+          return item;
+        }
+
+        return {
+          ...item,
+          unreadCount: 0,
+          lastReadAt: new Date().toISOString(),
+        };
+      });
+      this.selectedConversation = this.conversations.find((item) => item._id === conversation._id) || this.selectedConversation;
+    }
+
+    if (this.isMockConversation(conversation._id)) {
+      return;
+    }
+
+    this.chatService.markConversationAsRead(conversation.phoneNumber)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (!response.success) {
+            return;
+          }
+
+          this.conversations = this.conversations.map((item) => {
+            if (item._id !== conversation._id) {
+              return item;
+            }
+
+            return {
+              ...item,
+              unreadCount: Number(response.data?.unreadCount || 0),
+              lastReadAt: response.data?.lastReadAt || item.lastReadAt || null,
+            };
+          });
+          this.selectedConversation = this.conversations.find((item) => item._id === conversation._id) || this.selectedConversation;
+        },
+        error: () => {
+          // Ignore transient mark-read failures, next sync will reconcile.
+        },
+      });
+  }
+
+  private sortConversationsForInbox(items: ChatConversation[]): ChatConversation[] {
+    return [...items].sort((a, b) => {
+      const unreadA = Number(a.unreadCount || 0) > 0 ? 1 : 0;
+      const unreadB = Number(b.unreadCount || 0) > 0 ? 1 : 0;
+      if (unreadA !== unreadB) {
+        return unreadB - unreadA;
+      }
+
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+  }
+
+  private loadDraftCache(): void {
+    try {
+      const raw = localStorage.getItem(this.draftStorageKey);
+      if (!raw) {
+        this.draftByConversationId = {};
+        return;
+      }
+
+      const parsed = JSON.parse(raw);
+      this.draftByConversationId = parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      this.draftByConversationId = {};
+    }
+  }
+
+  private persistDraftCache(): void {
+    try {
+      localStorage.setItem(this.draftStorageKey, JSON.stringify(this.draftByConversationId));
+    } catch {
+      // Ignore storage errors silently to avoid breaking chat input.
+    }
   }
 }

@@ -17,6 +17,26 @@
       >
     </label>
 
+    <div class="conversation-filters">
+      <button
+        type="button"
+        class="filter-chip"
+        [class.active]="conversationFilter === 'all'"
+        (click)="setConversationFilter('all')"
+      >
+        All
+      </button>
+      <button
+        type="button"
+        class="filter-chip"
+        [class.active]="conversationFilter === 'unread'"
+        (click)="setConversationFilter('unread')"
+      >
+        Unread
+        <span class="filter-count" *ngIf="totalUnreadConversations > 0">{{ totalUnreadConversations }}</span>
+      </button>
+    </div>
+
     <div class="panel-state" *ngIf="isLoadingConversations && !conversations.length">
       Loading conversations...
     </div>
@@ -27,13 +47,17 @@
         class="conversation-card"
         *ngFor="let conversation of filteredConversations; trackBy: trackConversation"
         [class.active]="selectedConversation?._id === conversation._id"
+        [class.unread]="getUnreadCount(conversation._id) > 0"
         (click)="selectConversation(conversation)"
       >
         <div class="avatar">{{ conversation.phoneNumber.slice(-2) }}</div>
         <div class="conversation-copy">
           <div class="conversation-row">
             <h3>{{ conversation.clientName || conversation.phoneNumber }}</h3>
-            <time>{{ conversation.updatedAt | date:'shortTime' }}</time>
+            <div class="conversation-right-meta">
+              <time>{{ conversation.updatedAt | date:'shortTime' }}</time>
+              <span class="conversation-unread" *ngIf="getUnreadCount(conversation._id) > 0">{{ getUnreadCount(conversation._id) }}</span>
+            </div>
           </div>
           <p class="conversation-phone" *ngIf="conversation.clientName">{{ conversation.phoneNumber }}</p>
           <p>{{ conversation.lastMessage || 'No messages yet' }}</p>
@@ -191,11 +215,14 @@
                 </p>
                 <div class="file-message-header" *ngIf="!isImageFileMessage(message)">
                   <i class="fa-solid" [ngClass]="getFileIconClass(message)"></i>
-                  <span class="file-name">{{ message.filename || message.text }}</span>
+                  <div class="file-meta">
+                    <span class="file-name">{{ message.filename || message.text }}</span>
+                    <span class="file-type">{{ getFileTypeLabel(message) }}</span>
+                  </div>
                 </div>
                 <div class="file-actions" *ngIf="message.fileUrl && !isImageFileMessage(message)">
                   <button type="button" class="file-open-link" (click)="openFileViewer(message)">Open</button>
-                  <a class="file-download-link" [href]="message.fileUrl" [attr.download]="message.filename || 'attachment'">Download</a>
+                  <button type="button" class="file-download-link" (click)="downloadFileMessage(message)">Download</button>
                 </div>
               </div>
             </ng-container>
@@ -288,6 +315,7 @@
             </div>
             <textarea
               [(ngModel)]="draftMessage"
+              (ngModelChange)="onDraftChanged()"
               rows="1"
               placeholder="Type a message"
               [disabled]="hasAttachmentDrafts"
@@ -344,7 +372,7 @@
               <div class="generic-file-viewer">
                 <i class="fa-solid" [ngClass]="getFileIconClassByNameAndMimeType(viewer.name, viewer.mimeType)"></i>
                 <p>{{ viewer.name }}</p>
-                <a [href]="viewer.url" [attr.download]="viewer.name">Download file</a>
+                <button type="button" class="file-download-link" (click)="downloadActiveViewerFile()">Download file</button>
               </div>
             </ng-template>
           </ng-template>

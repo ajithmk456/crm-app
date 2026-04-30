@@ -8,6 +8,8 @@ export interface ChatConversation {
   phoneNumber: string;
   clientName?: string;
   lastMessage: string;
+  unreadCount?: number;
+  lastReadAt?: string | null;
   updatedAt: string;
   createdAt?: string;
 }
@@ -94,7 +96,7 @@ export interface SendTemplateRequest {
 }
 
 export interface RealtimeChatEvent {
-  eventType: 'incoming' | 'outgoing' | 'status';
+  eventType: 'incoming' | 'outgoing' | 'status' | 'read';
   phone: string;
   messageId?: string;
   status?: 'sent' | 'delivered' | 'read' | 'failed';
@@ -113,6 +115,23 @@ export class ChatService {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       autoConnect: true,
+    });
+  }
+
+  onSocketConnectionState(): Observable<boolean> {
+    return new Observable<boolean>((subscriber) => {
+      const emitState = () => subscriber.next(this.socket.connected);
+      const onConnect = () => subscriber.next(true);
+      const onDisconnect = () => subscriber.next(false);
+
+      emitState();
+      this.socket.on('connect', onConnect);
+      this.socket.on('disconnect', onDisconnect);
+
+      return () => {
+        this.socket.off('connect', onConnect);
+        this.socket.off('disconnect', onDisconnect);
+      };
     });
   }
 
@@ -212,6 +231,10 @@ export class ChatService {
 
   sendTemplate(data: SendTemplateRequest): Observable<SendMessageResponse> {
     return this.http.post<SendMessageResponse>('/api/chat/send-template', data);
+  }
+
+  markConversationAsRead(phone: string): Observable<{ success: boolean; data?: { phoneNumber: string; unreadCount: number; lastReadAt?: string | null } }> {
+    return this.http.post<{ success: boolean; data?: { phoneNumber: string; unreadCount: number; lastReadAt?: string | null } }>(`/api/chat/${encodeURIComponent(phone)}/read`, {});
   }
 
   onRealtimeUpdates(): Observable<RealtimeChatEvent> {
