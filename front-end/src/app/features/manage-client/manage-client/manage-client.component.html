@@ -83,7 +83,7 @@
           </td>
           <td>{{ client.createdAt | date: 'dd MMM yyyy' }}</td>
           <td class="text-center actions-cell">
-            <button class="btn-chat" title="Open Chat" (click)="openChat(client)">
+            <button class="btn-chat" title="Start Chat" (click)="openChat(client)">
               <i class="fas fa-comment-dots"></i>
             </button>
             <button class="btn-edit" title="Edit" (click)="openEditModal(client)">
@@ -116,11 +116,10 @@
 
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════ Add / Edit Modal -->
 <!-- ═══════════════════════════════════════════════════════════ Add / Edit Drawer -->
 <div class="drawer-overlay" *ngIf="isModalOpen" (click)="closeModal()"></div>
 
-<div class="drawer-container" [class.drawer-open]="isModalOpen">
+<div class="drawer-container" *ngIf="isModalOpen" [class.drawer-open]="isModalOpen">
   <div class="drawer-content" (click)="$event.stopPropagation()">
 
     <div class="drawer-header">
@@ -186,18 +185,35 @@
         </div>
 
         <div class="form-group full-width">
-          <label>Assign to Groups</label>
+          <label>Assign to Groups <span class="group-count" *ngIf="selectedGroupsCount > 0">({{ selectedGroupsCount }} selected)</span></label>
           <div class="groups-selection">
-            <div class="groups-list">
-              <label *ngFor="let group of groups" class="checkbox-label">
-                <input
-                  type="checkbox"
-                  [checked]="isGroupSelected(group._id || '')"
-                  (change)="toggleGroupSelection(group._id || '')"
-                />
-                <span class="checkbox-text">{{ group.name }}</span>
-              </label>
+            <div class="groups-search">
+              <i class="fas fa-search"></i>
+              <input
+                type="text"
+                placeholder="Search groups..."
+                [(ngModel)]="groupSearchTerm"
+                [ngModelOptions]="{ standalone: true }"
+              />
             </div>
+
+            <div class="groups-list chips-list" *ngIf="filteredGroups.length > 0; else noGroupsFound">
+              <button
+                *ngFor="let group of filteredGroups"
+                type="button"
+                class="group-chip"
+                [class.selected]="isGroupSelected(group._id || '')"
+                (click)="toggleGroupSelection(group._id || '')"
+              >
+                <span class="chip-check" *ngIf="isGroupSelected(group._id || '')"><i class="fas fa-check"></i></span>
+                <span class="chip-text">{{ group.name }}</span>
+              </button>
+            </div>
+
+            <ng-template #noGroupsFound>
+              <div class="no-groups-message">No matching groups found.</div>
+            </ng-template>
+
             <div class="selected-groups" *ngIf="getSelectedGroupNames() !== 'No groups selected'">
               <span class="selected-label">Selected:</span>
               <span class="selected-list">{{ getSelectedGroupNames() }}</span>

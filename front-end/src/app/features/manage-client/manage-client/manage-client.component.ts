@@ -40,6 +40,7 @@ export class ManageClientComponent implements OnInit {
   selectedFile: File | null = null;
   bulkResult: { created: number; skipped: number; errors: { row: string; reason: string }[] } | null = null;
   isBulkUploading = false;
+  groupSearchTerm = '';
 
   // Form
   clientForm = this.fb.group({
@@ -143,6 +144,7 @@ export class ManageClientComponent implements OnInit {
   openAddModal(): void {
     this.isEditMode = false;
     this.selectedClientId = null;
+    this.groupSearchTerm = '';
     this.clientForm.reset({ whatsappOptIn: true, groups: [] });
     this.isModalOpen = true;
   }
@@ -150,6 +152,7 @@ export class ManageClientComponent implements OnInit {
   openEditModal(client: Client): void {
     this.isEditMode = true;
     this.selectedClientId = client._id || null;
+    this.groupSearchTerm = '';
     const groupIds = client.groups?.map((g) => (typeof g === 'string' ? g : g._id || '')) || [];
     this.clientForm.setValue({
       name: client.name,
@@ -164,6 +167,7 @@ export class ManageClientComponent implements OnInit {
 
   closeModal(): void {
     this.isModalOpen = false;
+    this.groupSearchTerm = '';
     this.clientForm.reset({ whatsappOptIn: true, groups: [] });
   }
 
@@ -255,7 +259,10 @@ export class ManageClientComponent implements OnInit {
 
   openChat(client: Client): void {
     this.router.navigate(['/manage-chat'], {
-      state: { targetPhone: client.mobile },
+      state: {
+        targetPhone: client.mobile,
+        startChat: true,
+      },
     });
   }
 
@@ -323,6 +330,17 @@ export class ManageClientComponent implements OnInit {
   isGroupSelected(groupId: string): boolean {
     const groupsControl = this.clientForm.get('groups') as any;
     return (groupsControl.value || []).includes(groupId);
+  }
+
+  get selectedGroupsCount(): number {
+    const groupsControl = this.clientForm.get('groups') as any;
+    return (groupsControl.value || []).length;
+  }
+
+  get filteredGroups(): Group[] {
+    const query = this.groupSearchTerm.trim().toLowerCase();
+    if (!query) return this.groups;
+    return this.groups.filter((group) => group.name.toLowerCase().includes(query));
   }
 
   getSelectedGroupNames(): string {
