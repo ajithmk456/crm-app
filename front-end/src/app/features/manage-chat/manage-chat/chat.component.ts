@@ -893,20 +893,27 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     const isImage = this.isImageFileMessage(message);
     const isPdf = this.isPdfFileMessage(message);
 
-    if (isPdf) {
-      window.open(fileUrl, '_blank', 'noopener');
-      return;
-    }
-
     this.revokePdfBlobUrl();
     this.activeFileViewer = { url: fileUrl, name, mimeType, isImage, isPdf };
-    this.activeFileViewerResourceUrl = null;
+    this.activeFileViewerResourceUrl = isPdf
+      ? this.sanitizer.bypassSecurityTrustResourceUrl(fileUrl)
+      : null;
     this.pdfViewerError = '';
-    this.isPdfViewerLoading = false;
+    this.isPdfViewerLoading = isPdf;
   }
 
   onPdfViewerLoad(): void {
     this.isPdfViewerLoading = false;
+  }
+
+  onPdfViewerError(): void {
+    this.isPdfViewerLoading = false;
+    this.pdfViewerError = 'Inline preview unavailable. Opening in new tab...';
+
+    const fileUrl = this.activeFileViewer?.url;
+    if (fileUrl) {
+      window.open(fileUrl, '_blank', 'noopener');
+    }
   }
 
   closeFileViewer(): void {

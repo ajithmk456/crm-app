@@ -389,12 +389,15 @@
             <img [src]="viewer.url" [alt]="viewer.name">
           </ng-container>
           <ng-template #nonImageViewerTpl>
-            <div class="file-viewer-stage" *ngIf="viewer.isPdf && activeFileViewerResourceUrl; else genericFileViewerTpl">
+            <div class="file-viewer-stage" *ngIf="viewer.isPdf; else genericFileViewerTpl">
               <div class="pdf-viewer-loading" *ngIf="isPdfViewerLoading">
                 <span class="image-loading-spinner"></span>
                 <span>Loading PDF preview...</span>
               </div>
-              <iframe [class.pdf-frame-hidden]="isPdfViewerLoading" [src]="activeFileViewerResourceUrl" title="PDF preview" (load)="onPdfViewerLoad()"></iframe>
+              <div class="pdf-viewer-loading" *ngIf="pdfViewerError && !isPdfViewerLoading">
+                <span>{{ pdfViewerError }}</span>
+              </div>
+              <iframe *ngIf="activeFileViewerResourceUrl && !pdfViewerError" [class.pdf-frame-hidden]="isPdfViewerLoading" [src]="activeFileViewerResourceUrl" title="PDF preview" (load)="onPdfViewerLoad()" (error)="onPdfViewerError()"></iframe>
             </div>
             <ng-template #genericFileViewerTpl>
               <div class="generic-file-viewer">
