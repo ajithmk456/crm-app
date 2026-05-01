@@ -3,8 +3,8 @@ const axios = require('axios');
 const CACHE_TTL_MS = Math.max(30000, Number(process.env.WHATSAPP_TEMPLATE_CACHE_TTL_MS || 5 * 60 * 1000));
 const cacheByLanguage = new Map();
 
-const APPROVED_STATUSES = new Set(['approved', 'active', 'enabled', 'live', 'published']);
-const REJECTED_OR_INACTIVE = new Set(['rejected', 'draft', 'disabled', 'inactive', 'paused', 'archived']);
+const APPROVED_STATUSES = new Set(['approved', 'active', 'enabled', 'live', 'published', 'not rated', 'not_rated', 'sandbox', 'unrated']);
+const REJECTED_OR_INACTIVE = new Set(['rejected', 'draft', 'disabled', 'inactive', 'paused', 'archived', 'failed', 'deactivated']);
 
 const normalizeText = (value) => String(value || '').trim();
 
