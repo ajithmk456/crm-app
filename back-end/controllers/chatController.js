@@ -130,6 +130,36 @@ const safeLoadTemplates = async (language = '') => {
   }
 };
 
+const ensureChatParticipant = async (phoneNumber, { ensureConversation = false } = {}) => {
+  const normalizedPhone = normalizePhone(phoneNumber);
+  if (!normalizedPhone) {
+    return;
+  }
+
+  try {
+    const { findOrCreateClientByMobile } = require('./clientController');
+    await findOrCreateClientByMobile(normalizedPhone);
+  } catch (error) {
+    console.warn('[ensureChatParticipant] Could not auto-create client for phone:', normalizedPhone, error?.message || error);
+  }
+
+  if (!ensureConversation) {
+    return;
+  }
+
+  try {
+    const existingConversation = await Conversation.findOne({ phoneNumber: normalizedPhone }).select('_id').lean();
+    if (!existingConversation?._id) {
+      await Conversation.create({
+        phoneNumber: normalizedPhone,
+        lastMessage: '',
+      });
+    }
+  } catch (error) {
+    console.warn('[ensureChatParticipant] Could not ensure conversation for phone:', normalizedPhone, error?.message || error);
+  }
+};
+
 const getSessionStateForPhone = async (phoneNumber) => {
   const normalizedPhone = normalizePhone(phoneNumber);
   if (!normalizedPhone) {
@@ -204,6 +234,7 @@ exports.startChatSession = async (req, res, next) => {
     }
 
     const normalizedPhone = normalizePhone(targetPhone);
+    await ensureChatParticipant(normalizedPhone, { ensureConversation: true });
     const session = await getSessionStateForPhone(normalizedPhone);
     const templates = await safeLoadTemplates(language);
 
@@ -252,6 +283,8 @@ exports.sendChatMessage = async (req, res, next) => {
     if (!to || !messageText) {
       return res.status(400).json({ success: false, message: 'to and text are required.' });
     }
+
+    await ensureChatParticipant(to);
 
     const hasActiveSession = await isSessionActiveForPhone(to);
     if (!hasActiveSession) {
@@ -305,6 +338,8 @@ exports.sendChatFile = async (req, res, next) => {
         message: 'to, fileUrl and filename are required.',
       });
     }
+
+    await ensureChatParticipant(to);
 
     const normalizedFileUrl = String(fileUrl || '').trim();
     const isSecureUrl = /^https:\/\//i.test(normalizedFileUrl);
@@ -374,6 +409,8 @@ exports.sendChatTemplate = async (req, res, next) => {
         message: 'to and templateId are required.',
       });
     }
+
+    await ensureChatParticipant(to);
 
     // Validate that the templateId exists in the approved catalog before sending.
     const approvedTemplates = await safeLoadTemplates();

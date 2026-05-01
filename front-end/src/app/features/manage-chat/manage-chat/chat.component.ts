@@ -79,6 +79,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   isLoadingTemplates = false;
   templateModalError = '';
   templateSentAwaitingReply = false;
+  showNewChatModal = false;
+  isStartingNewChat = false;
+  newChatPhoneInput = '';
+  newChatError = '';
   isCheckingSession = false;
   showScrollToBottomButton = false;
   unreadNewMessages = 0;
@@ -528,6 +532,57 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
   setConversationFilter(filter: 'all' | 'unread'): void {
     this.conversationFilter = filter;
+  }
+
+  openNewChatModal(): void {
+    this.showNewChatModal = true;
+    this.newChatError = '';
+    this.newChatPhoneInput = '';
+  }
+
+  closeNewChatModal(): void {
+    if (this.isStartingNewChat) {
+      return;
+    }
+
+    this.showNewChatModal = false;
+    this.newChatError = '';
+    this.newChatPhoneInput = '';
+  }
+
+  startNewChat(): void {
+    if (this.isStartingNewChat) {
+      return;
+    }
+
+    const normalizedPhone = this.normalizePhone(this.newChatPhoneInput);
+    if (!/^\d{10,15}$/.test(normalizedPhone)) {
+      this.newChatError = 'Enter a valid mobile number with country code (10-15 digits).';
+      return;
+    }
+
+    this.isStartingNewChat = true;
+    this.newChatError = '';
+
+    const existingConversation = this.conversations.find((conversation) => this.normalizePhone(conversation.phoneNumber) === normalizedPhone);
+    const targetConversation = existingConversation || this.buildAdhocConversation(normalizedPhone);
+    if (!targetConversation) {
+      this.isStartingNewChat = false;
+      this.newChatError = 'Unable to start chat for this number. Please try again.';
+      return;
+    }
+
+    if (!existingConversation) {
+      this.conversations = this.sortConversationsForInbox([targetConversation, ...this.conversations]);
+    }
+
+    this.pendingTemplatePromptPhone = normalizedPhone;
+    this.selectConversation(targetConversation);
+    this.refreshConversationsFromApi(true);
+
+    this.isStartingNewChat = false;
+    this.showNewChatModal = false;
+    this.newChatPhoneInput = '';
   }
 
   toggleNotificationSound(): void {

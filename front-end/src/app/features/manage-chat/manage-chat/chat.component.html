@@ -9,6 +9,10 @@
           placeholder="Search phone number or message"
         >
       </label>
+      <button type="button" class="new-chat-btn" (click)="openNewChatModal()" title="Start new chat">
+        <i class="fa-solid fa-plus"></i>
+        <span>New Chat</span>
+      </button>
       <span class="conversation-count">{{ conversations.length }}</span>
       <button
         class="sound-toggle-btn"
@@ -472,6 +476,41 @@
             <button type="button" class="template-secondary" (click)="closeTemplateModal()" [disabled]="isSendingTemplate">Cancel</button>
             <button type="button" class="template-primary" (click)="sendTemplateToStartChat()" [disabled]="!selectedTemplateId || isSendingTemplate">
               {{ isSendingTemplate ? 'Sending...' : 'Send Template' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="template-modal-backdrop" *ngIf="showNewChatModal" (click)="closeNewChatModal()">
+        <div class="template-modal new-chat-modal" (click)="$event.stopPropagation()">
+          <div class="template-modal-header">
+            <h4>Start New Chat</h4>
+            <button type="button" class="template-close" (click)="closeNewChatModal()" [disabled]="isStartingNewChat">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <p class="template-helper">
+            Enter customer mobile number. We will check the WhatsApp session and guide you to direct chat or template start.
+          </p>
+
+          <label class="template-field">
+            <span>Mobile number</span>
+            <input
+              type="tel"
+              [(ngModel)]="newChatPhoneInput"
+              placeholder="e.g. +91 9876543210"
+              [disabled]="isStartingNewChat"
+              (keydown.enter)="startNewChat()"
+            >
+          </label>
+
+          <p class="template-error" *ngIf="newChatError">{{ newChatError }}</p>
+
+          <div class="template-modal-actions">
+            <button type="button" class="template-secondary" (click)="closeNewChatModal()" [disabled]="isStartingNewChat">Cancel</button>
+            <button type="button" class="template-primary" (click)="startNewChat()" [disabled]="isStartingNewChat">
+              {{ isStartingNewChat ? 'Starting...' : 'Start Chat' }}
             </button>
           </div>
         </div>
