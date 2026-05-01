@@ -222,8 +222,15 @@ const getApprovedTemplates = async ({ language, forceRefresh = false } = {}) => 
     writeCache(normalizedLanguage, normalizedTemplates);
     return normalizedTemplates;
   } catch (error) {
+    if (String(error?.message || '').includes('GUPSHUP_TEMPLATES_URL is not configured.')) {
+      console.warn('[chatTemplateService] Template provider URL is not configured. Returning empty template list.');
+      writeCache(normalizedLanguage, []);
+      return [];
+    }
+
     const fallback = cacheByLanguage.get(toCacheKey(normalizedLanguage));
     if (fallback?.templates?.length) {
+      console.warn('[chatTemplateService] Using cached template fallback due to provider fetch error:', error?.message || error);
       return fallback.templates;
     }
 
