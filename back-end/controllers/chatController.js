@@ -234,7 +234,6 @@ exports.startChatSession = async (req, res, next) => {
     }
 
     const normalizedPhone = normalizePhone(targetPhone);
-    await ensureChatParticipant(normalizedPhone, { ensureConversation: true });
     const session = await getSessionStateForPhone(normalizedPhone);
     const templates = await safeLoadTemplates(language);
 
@@ -262,7 +261,17 @@ exports.getChatTemplates = async (req, res, next) => {
   try {
     const language = String(req.query?.language || '').trim();
     const forceRefresh = String(req.query?.refresh || '').toLowerCase() === 'true';
-    const templates = await getApprovedTemplates({ language, forceRefresh });
+    let templates;
+    if (forceRefresh) {
+      try {
+        templates = await getApprovedTemplates({ language, forceRefresh: true });
+      } catch (error) {
+        console.warn('[getChatTemplates] Provider refresh failed, returning safe fallback list:', error?.message || error);
+        templates = await safeLoadTemplates(language);
+      }
+    } else {
+      templates = await safeLoadTemplates(language);
+    }
 
     return res.status(200).json({
       success: true,
@@ -482,10 +491,21 @@ exports.refreshChatTemplates = async (req, res, next) => {
   try {
     invalidateTemplateCache();
     console.log('[refreshChatTemplates] Template cache invalidated, fetching fresh list.');
-    const templates = await getApprovedTemplates({ forceRefresh: true });
+    let templates = [];
+    let usedFallback = false;
+    try {
+      templates = await getApprovedTemplates({ forceRefresh: true });
+    } catch (error) {
+      usedFallback = true;
+      console.warn('[refreshChatTemplates] Provider refresh failed, returning fallback list:', error?.message || error);
+      templates = await safeLoadTemplates();
+    }
+
     return res.status(200).json({
       success: true,
-      message: 'Template cache refreshed.',
+      message: usedFallback
+        ? 'Template cache refresh failed at provider; returned fallback template list.'
+        : 'Template cache refreshed.',
       data: templates,
     });
   } catch (error) {
@@ -851,9 +871,6 @@ exports.markConversationRead = async (req, res, next) => {
     }
 
     const updatedConversation = await markConversationAsRead(phone);
-    if (!updatedConversation) {
-      return res.status(404).json({ success: false, message: 'Conversation not found.' });
-    }
 
     emitChatUpdate({
       eventType: 'read',
@@ -864,9 +881,9 @@ exports.markConversationRead = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: {
-        phoneNumber: updatedConversation.phoneNumber,
-        unreadCount: Number(updatedConversation.unreadCount || 0),
-        lastReadAt: updatedConversation.lastReadAt || null,
+        phoneNumber: updatedConversation?.phoneNumber || normalizePhone(phone),
+        unreadCount: Number(updatedConversation?.unreadCount || 0),
+        lastReadAt: updatedConversation?.lastReadAt || null,
       },
     });
   } catch (error) {
