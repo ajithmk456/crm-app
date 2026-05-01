@@ -149,6 +149,42 @@ const extractTemplateList = (providerResponse) => {
   return [];
 };
 
+const readFallbackTemplatesFromEnv = () => {
+  const raw = normalizeText(
+    process.env.WHATSAPP_FALLBACK_TEMPLATES_JSON
+    || process.env.WHATSAPP_TEMPLATE_FALLBACK_JSON
+  );
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((item) => normalizeTemplate({
+        ...item,
+        status: item?.status || 'approved',
+      }))
+      .filter(Boolean)
+      .filter((template) => APPROVED_STATUSES.has(template.status))
+      .map((template) => ({
+        id: template.id,
+        name: template.name,
+        category: template.category,
+        language: template.language,
+        body: template.body,
+        variables: template.variables,
+      }));
+  } catch (error) {
+    console.warn('[chatTemplateService] Failed to parse WHATSAPP_FALLBACK_TEMPLATES_JSON:', error?.message || error);
+    return [];
+  }
+};
+
 const fetchTemplatesFromProvider = async () => {
   const templatesUrl = normalizeText(process.env.GUPSHUP_TEMPLATES_URL || process.env.WHATSAPP_PROVIDER_TEMPLATES_URL);
   if (!templatesUrl) {
@@ -223,9 +259,19 @@ const getApprovedTemplates = async ({ language, forceRefresh = false } = {}) => 
     return normalizedTemplates;
   } catch (error) {
     if (String(error?.message || '').includes('GUPSHUP_TEMPLATES_URL is not configured.')) {
-      console.warn('[chatTemplateService] Template provider URL is not configured. Returning empty template list.');
-      writeCache(normalizedLanguage, []);
-      return [];
+      const fallbackTemplates = readFallbackTemplatesFromEnv();
+      const filteredFallback = normalizedLanguage
+        ? fallbackTemplates.filter((template) => template.language === normalizedLanguage)
+        : fallbackTemplates;
+
+      if (filteredFallback.length) {
+        console.warn('[chatTemplateService] Provider URL missing. Using fallback templates from env.');
+      } else {
+        console.warn('[chatTemplateService] Template provider URL is not configured. Returning empty template list.');
+      }
+
+      writeCache(normalizedLanguage, filteredFallback);
+      return filteredFallback;
     }
 
     const fallback = cacheByLanguage.get(toCacheKey(normalizedLanguage));
