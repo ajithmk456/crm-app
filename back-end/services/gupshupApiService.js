@@ -5,9 +5,15 @@ const GUPSHUP_SOURCE = process.env.GUPSHUP_SOURCE || '916384322139';
 const GUPSHUP_SRC_NAME = process.env.GUPSHUP_SRC_NAME || '';
 
 const normalizeDestination = (value) => {
-  const digits = String(value || '').replace(/\D/g, '');
+  const raw = String(value || '').trim();
+  const digits = raw.replace(/\D/g, '');
   if (!digits) {
     return '';
+  }
+
+  // If caller explicitly provides a country code (e.g. +93...), preserve it.
+  if (raw.startsWith('+')) {
+    return digits;
   }
 
   // If user enters a 10-digit Indian mobile number, auto-prefix country code.

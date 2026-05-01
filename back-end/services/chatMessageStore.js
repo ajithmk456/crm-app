@@ -309,8 +309,12 @@ const markConversationAsRead = async (phone) => {
         unreadCount: 0,
         lastReadAt: new Date(),
       },
+      $setOnInsert: {
+        phoneNumber: normalizedPhone,
+        lastMessage: '',
+      },
     },
-    { new: true }
+    { new: true, upsert: true, setDefaultsOnInsert: true }
   ).lean();
 };
 
