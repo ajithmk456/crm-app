@@ -195,15 +195,13 @@ const getApprovedTemplates = async ({ language, forceRefresh = false } = {}) => 
       .map(normalizeTemplate)
       .filter(Boolean)
       .filter((template) => {
-        if (!template.status) {
-          return true;
-        }
-
-        if (REJECTED_OR_INACTIVE.has(template.status)) {
+        // Only include templates that are explicitly in the approved set.
+        // Templates with missing/unknown status are treated as not approved.
+        if (!template.status || !APPROVED_STATUSES.has(template.status)) {
           return false;
         }
 
-        return APPROVED_STATUSES.has(template.status);
+        return true;
       })
       .filter((template) => {
         if (!normalizedLanguage) {

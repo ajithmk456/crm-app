@@ -16,7 +16,7 @@ const {
 } = require('../services/chatMessageStore');
 const { emitChatUpdate } = require('../services/socketService');
 const { resolveClientIdByPhone } = require('../services/activityHistoryService');
-const { getApprovedTemplates } = require('../services/chatTemplateService');
+const { getApprovedTemplates, invalidateTemplateCache } = require('../services/chatTemplateService');
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -375,13 +375,35 @@ exports.sendChatTemplate = async (req, res, next) => {
       });
     }
 
+    // Validate that the templateId exists in the approved catalog before sending.
+    const approvedTemplates = await safeLoadTemplates();
+    const isApproved = approvedTemplates.some((t) => t.id === templateId);
+    if (!isApproved) {
+      console.warn(`[sendChatTemplate] Rejected templateId "${templateId}" for ${to} — not found in approved catalog.`);
+      return res.status(400).json({
+        success: false,
+        code: 'TEMPLATE_NOT_APPROVED',
+        message: 'The specified template is not in the approved catalog.',
+      });
+    }
+
     const templateParams = Array.isArray(params) ? params : [];
-    const result = await sendGupshupTemplateMessage({
-      to,
-      templateId,
-      params: templateParams,
-    });
+    console.log(`[sendChatTemplate] Sending template "${templateId}" to ${to} with ${templateParams.length} param(s).`);
+
+    let result;
+    try {
+      result = await sendGupshupTemplateMessage({
+        to,
+        templateId,
+        params: templateParams,
+      });
+    } catch (providerError) {
+      console.error(`[sendChatTemplate] Provider error sending template "${templateId}" to ${to}:`, providerError?.message || providerError);
+      throw providerError;
+    }
+
     const messageId = result.messageId || `local-template-${Date.now()}`;
+    console.log(`[sendChatTemplate] Template "${templateId}" sent to ${to}, messageId=${messageId}.`);
 
     const summaryText = `Template: ${templateId}`;
     await saveMessage({
@@ -413,6 +435,24 @@ exports.sendChatTemplate = async (req, res, next) => {
       },
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/chat/templates/refresh
+// Invalidates the in-memory template cache and returns a fresh list from the provider.
+exports.refreshChatTemplates = async (req, res, next) => {
+  try {
+    invalidateTemplateCache();
+    console.log('[refreshChatTemplates] Template cache invalidated, fetching fresh list.');
+    const templates = await getApprovedTemplates({ forceRefresh: true });
+    return res.status(200).json({
+      success: true,
+      message: 'Template cache refreshed.',
+      data: templates,
+    });
+  } catch (error) {
+    console.error('[refreshChatTemplates] Failed to refresh template cache:', error?.message || error);
     next(error);
   }
 };

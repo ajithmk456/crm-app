@@ -10,6 +10,15 @@
         >
       </label>
       <span class="conversation-count">{{ conversations.length }}</span>
+      <button
+        class="sound-toggle-btn"
+        type="button"
+        (click)="toggleNotificationSound()"
+        [title]="notificationSoundLabel"
+        [attr.aria-pressed]="notificationSoundEnabled"
+      >
+        <i [class]="notificationSoundEnabled ? 'fa-solid fa-bell' : 'fa-solid fa-bell-slash'"></i>
+      </button>
       <button class="fullscreen-btn" type="button" (click)="toggleFullscreen()" [title]="isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'">
         <i [class]="isFullscreen ? 'fa-solid fa-compress' : 'fa-solid fa-expand'"></i>
       </button>
@@ -357,6 +366,9 @@
           <div class="session-expired-notice" *ngIf="!isSessionActive">
             Session has expired. Send an approved template to start the conversation.
             <button type="button" class="inline-template-action" (click)="openTemplateModal()">Choose Template</button>
+          </div>
+          <div class="template-awaiting-reply-notice" *ngIf="isSessionActive && templateSentAwaitingReply">
+            Template sent. Waiting for the customer to reply before you can continue chatting.
           </div>
           <div class="attachment-mode-hint" *ngIf="hasAttachmentDrafts">
             Add caption in preview bubble and press Send.

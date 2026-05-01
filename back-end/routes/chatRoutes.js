@@ -2,6 +2,7 @@ const express = require('express');
 const {
 	startChatSession,
 	getChatTemplates,
+	refreshChatTemplates,
 	sendChatMessage,
 	sendChatFile,
 	sendChatTemplate,
@@ -14,6 +15,7 @@ const router = express.Router();
 
 router.post('/start', startChatSession);
 router.get('/templates', getChatTemplates);
+router.post('/templates/refresh', refreshChatTemplates);
 
 /**
  * @openapi

@@ -78,6 +78,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   isSendingTemplate = false;
   isLoadingTemplates = false;
   templateModalError = '';
+  templateSentAwaitingReply = false;
   isCheckingSession = false;
   showScrollToBottomButton = false;
   unreadNewMessages = 0;
@@ -97,6 +98,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   socketConnected = false;
   readonly quickEmojis = ['😀', '😂', '😊', '😍', '👍', '🙏', '🔥', '🎉', '❤️', '✅', '📌', '👋'];
   private readonly draftStorageKey = 'manage-chat-drafts-v1';
+  readonly notificationSoundStorageKey = 'manage-chat-notification-sound-enabled-v1';
+  notificationSoundEnabled = true;
+  notificationSoundReady = false;
 
   private readonly destroy$ = new Subject<void>();
   private readonly selectedConversation$ = new Subject<string>();
@@ -251,6 +255,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly optimisticImagePreviewUrls = new Set<string>();
   private readonly brokenInlineImageMessageIds = new Set<string>();
   private readonly loadedInlineImageMessageIds = new Set<string>();
+  private readonly notifiedIncomingKeys = new Set<string>();
+  private readonly lastNotificationAtByPhone: Record<string, number> = {};
+  private unreadCountByConversationId: Record<string, number> = {};
+  private hasHydratedConversationNotifications = false;
+  private audioContext: AudioContext | null = null;
+  private hasUserUnlockedAudio = false;
   isFullscreen = false;
 
   constructor(
@@ -262,6 +272,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
   ngOnInit(): void {
     this.loadDraftCache();
+    this.loadNotificationSoundPreference();
 
     this.chatService.onSocketConnectionState()
       .pipe(takeUntil(this.destroy$))
@@ -333,8 +344,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     this.optimisticImagePreviewUrls.clear();
     this.brokenInlineImageMessageIds.clear();
     this.loadedInlineImageMessageIds.clear();
+    this.notifiedIncomingKeys.clear();
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  @HostListener('document:pointerdown')
+  @HostListener('document:keydown')
+  onUserInteraction(): void {
+    this.ensureNotificationAudioReady();
   }
 
   get filteredConversations(): ChatConversation[] {
@@ -408,6 +426,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.isSessionActive ? 'Active session' : 'Session expired';
   }
 
+  get notificationSoundLabel(): string {
+    if (!this.notificationSoundEnabled) {
+      return 'Sound off';
+    }
+
+    return this.notificationSoundReady ? 'Sound on' : 'Tap to enable sound';
+  }
+
   get selectedTemplatePreview(): string {
     const selectedTemplate = this.selectedTemplate;
     const templateBody = String(selectedTemplate?.body || '').trim();
@@ -472,6 +498,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     this.selectedConversation = conversation;
     this.showTemplateModal = false;
     this.templateModalError = '';
+    this.templateSentAwaitingReply = false;
     this.draftMessage = this.draftByConversationId[conversation._id] || '';
     this.markConversationAsRead(conversation, true);
     if (this.isMockConversation(conversation._id)) {
@@ -501,6 +528,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
   setConversationFilter(filter: 'all' | 'unread'): void {
     this.conversationFilter = filter;
+  }
+
+  toggleNotificationSound(): void {
+    this.notificationSoundEnabled = !this.notificationSoundEnabled;
+    this.persistNotificationSoundPreference();
+
+    if (this.notificationSoundEnabled) {
+      this.ensureNotificationAudioReady();
+    }
   }
 
   getUnreadCount(conversationId: string): number {
@@ -1190,6 +1226,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       next: () => {
         this.isSendingTemplate = false;
         this.showTemplateModal = false;
+        this.templateSentAwaitingReply = true;
         if (this.selectedConversation) {
           this.syncSelectedConversationPreview(`Template: ${this.selectedTemplateId}`, this.selectedConversation._id);
           this.selectedConversation$.next(this.selectedConversation._id);
@@ -1281,7 +1318,6 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   private loadTemplatesFromApi(forceRefresh = false): void {
     this.isLoadingTemplates = true;
     this.chatService.getTemplates({
-      language: 'en',
       refresh: forceRefresh,
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response) => {
@@ -1439,6 +1475,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       }
 
       const previousSelectionId = this.selectedConversation?._id;
+      this.maybeNotifyForUnreadCountChanges(conversationsToRender);
       this.conversations = this.sortConversationsForInbox(conversationsToRender);
       this.lastConversationFetchAt = Date.now();
 
@@ -1553,7 +1590,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
       const previousLastMessageId = this.messages[this.messages.length - 1]?.messageId || '';
       this.messages = this.mergePendingMessages(this.withMockMetadata(response.data));
-      const nextLastMessageId = this.messages[this.messages.length - 1]?.messageId || '';
+      const latestMessage = this.messages[this.messages.length - 1] || null;
+      const nextLastMessageId = latestMessage?.messageId || '';
       const hasNewTailMessage = Boolean(nextLastMessageId && nextLastMessageId !== previousLastMessageId);
 
       if (this.forceScrollOnNextMessageUpdate) {
@@ -1564,6 +1602,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
       if (!hasNewTailMessage) {
         return;
+      }
+
+       if (latestMessage && previousLastMessageId) {
+        this.maybeNotifyIncomingMessage(latestMessage, this.selectedConversation?.phoneNumber || '');
       }
 
       if (this.isNearBottom()) {
@@ -1675,6 +1717,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     if (event.eventType === 'incoming') {
+      this.maybeNotifyIncomingRealtimeEvent(event, eventPhone);
       if (this.selectedConversation && this.normalizePhone(this.selectedConversation.phoneNumber) === eventPhone) {
         this.sessionState = 'active';
         this.sessionInfo = {
@@ -1701,6 +1744,256 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private normalizePhone(value: string): string {
     return String(value || '').replace(/^whatsapp:/i, '').replace(/\D/g, '').trim();
+  }
+
+  private loadNotificationSoundPreference(): void {
+    try {
+      const rawPreference = localStorage.getItem(this.notificationSoundStorageKey);
+      if (rawPreference === null) {
+        this.notificationSoundEnabled = true;
+        return;
+      }
+
+      this.notificationSoundEnabled = rawPreference !== 'false';
+    } catch {
+      this.notificationSoundEnabled = true;
+    }
+  }
+
+  private persistNotificationSoundPreference(): void {
+    try {
+      localStorage.setItem(this.notificationSoundStorageKey, String(this.notificationSoundEnabled));
+    } catch {
+      // Ignore localStorage write failures.
+    }
+  }
+
+  private maybeNotifyIncomingRealtimeEvent(event: RealtimeChatEvent, normalizedPhone: string): void {
+    const incomingKey = this.buildIncomingNotificationKey({
+      phone: normalizedPhone,
+      messageId: event.messageId,
+      timestamp: event.timestamp,
+      text: event.text,
+    });
+    if (!incomingKey) {
+      return;
+    }
+
+    this.playIncomingNotification(incomingKey, normalizedPhone, event.text || 'New message');
+  }
+
+  private maybeNotifyIncomingMessage(message: PendingMessage, phoneNumber: string): void {
+    if (message.direction !== 'incoming') {
+      return;
+    }
+
+    // Customer replied — clear the "awaiting reply" banner for this conversation.
+    if (this.templateSentAwaitingReply) {
+      this.templateSentAwaitingReply = false;
+      this.refreshSessionState(phoneNumber);
+    }
+
+    const incomingKey = this.buildIncomingNotificationKey({
+      phone: this.normalizePhone(phoneNumber || message.from || ''),
+      messageId: message.messageId,
+      timestamp: message.timestamp,
+      text: message.text,
+    });
+    if (!incomingKey) {
+      return;
+    }
+
+    this.playIncomingNotification(incomingKey, this.normalizePhone(phoneNumber || message.from || ''), message.text || 'New message');
+  }
+
+  private maybeNotifyForUnreadCountChanges(conversations: ChatConversation[]): void {
+    const nextUnreadMap: Record<string, number> = {};
+    let shouldNotify = false;
+    let notificationPhone = '';
+    let notificationPreview = 'New message';
+
+    conversations.forEach((conversation) => {
+      const unreadCount = Number(conversation.unreadCount || 0);
+      nextUnreadMap[conversation._id] = unreadCount;
+
+      if (!this.hasHydratedConversationNotifications) {
+        return;
+      }
+
+      const previousUnreadCount = Number(this.unreadCountByConversationId[conversation._id] || 0);
+      if (unreadCount > previousUnreadCount) {
+        shouldNotify = true;
+        notificationPhone = this.normalizePhone(conversation.phoneNumber);
+        notificationPreview = conversation.lastMessage || 'New message';
+      }
+    });
+
+    this.unreadCountByConversationId = nextUnreadMap;
+    if (!this.hasHydratedConversationNotifications) {
+      this.hasHydratedConversationNotifications = true;
+      return;
+    }
+
+    if (!shouldNotify) {
+      return;
+    }
+
+    const incomingKey = this.buildIncomingNotificationKey({
+      phone: notificationPhone,
+      timestamp: new Date().toISOString(),
+      text: notificationPreview,
+    });
+    if (!incomingKey) {
+      return;
+    }
+
+    this.playIncomingNotification(incomingKey, notificationPhone, notificationPreview);
+  }
+
+  private buildIncomingNotificationKey(payload: { phone: string; messageId?: string; timestamp?: string; text?: string }): string {
+    const normalizedPhone = this.normalizePhone(payload.phone);
+    if (!normalizedPhone) {
+      return '';
+    }
+
+    const messageId = String(payload.messageId || '').trim();
+    if (messageId) {
+      return `${normalizedPhone}:${messageId}`;
+    }
+
+    const timestamp = String(payload.timestamp || '').trim();
+    const text = String(payload.text || '').trim();
+    if (!timestamp && !text) {
+      return '';
+    }
+
+    return `${normalizedPhone}:${timestamp}:${text}`;
+  }
+
+  private playIncomingNotification(notificationKey: string, normalizedPhone: string, previewText: string): void {
+    if (!this.notificationSoundEnabled || this.notifiedIncomingKeys.has(notificationKey)) {
+      return;
+    }
+
+    const lastNotifiedAt = Number(this.lastNotificationAtByPhone[normalizedPhone] || 0);
+    if (lastNotifiedAt && Date.now() - lastNotifiedAt < 2500) {
+      this.notifiedIncomingKeys.add(notificationKey);
+      this.trimNotificationHistory();
+      return;
+    }
+
+    this.notifiedIncomingKeys.add(notificationKey);
+    this.lastNotificationAtByPhone[normalizedPhone] = Date.now();
+    this.trimNotificationHistory();
+
+    if (this.shouldSuppressIncomingSound(normalizedPhone)) {
+      return;
+    }
+
+    this.ensureNotificationAudioReady();
+    this.playNotificationTone();
+    this.showBrowserNotificationIfNeeded(previewText, normalizedPhone);
+  }
+
+  private shouldSuppressIncomingSound(normalizedPhone: string): boolean {
+    if (document.hidden) {
+      return false;
+    }
+
+    const isViewingSameConversation = Boolean(
+      this.selectedConversation
+      && this.normalizePhone(this.selectedConversation.phoneNumber) === normalizedPhone
+    );
+
+    return isViewingSameConversation && document.hasFocus();
+  }
+
+  private ensureNotificationAudioReady(): void {
+    if (!this.notificationSoundEnabled || typeof window === 'undefined') {
+      return;
+    }
+
+    const AudioContextCtor = (window as typeof window & { webkitAudioContext?: typeof AudioContext }).AudioContext
+      || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) {
+      return;
+    }
+
+    if (!this.audioContext) {
+      this.audioContext = new AudioContextCtor();
+    }
+
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume()
+        .then(() => {
+          this.hasUserUnlockedAudio = true;
+          this.notificationSoundReady = true;
+        })
+        .catch(() => {
+          this.notificationSoundReady = false;
+        });
+      return;
+    }
+
+    this.hasUserUnlockedAudio = true;
+    this.notificationSoundReady = true;
+  }
+
+  private playNotificationTone(): void {
+    if (!this.hasUserUnlockedAudio || !this.audioContext) {
+      return;
+    }
+
+    const context = this.audioContext;
+    const now = context.currentTime;
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, now);
+    oscillator.frequency.exponentialRampToValueAtTime(660, now + 0.18);
+
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.exponentialRampToValueAtTime(0.045, now + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.24);
+  }
+
+  private showBrowserNotificationIfNeeded(previewText: string, normalizedPhone: string): void {
+    if (!document.hidden || typeof window === 'undefined' || !('Notification' in window)) {
+      return;
+    }
+
+    if (Notification.permission !== 'granted') {
+      return;
+    }
+
+    const title = this.resolveConversationNotificationTitle(normalizedPhone);
+    new Notification(title, {
+      body: previewText || 'New incoming message',
+      tag: `chat-${normalizedPhone}`,
+      silent: true,
+    });
+  }
+
+  private resolveConversationNotificationTitle(normalizedPhone: string): string {
+    const matchingConversation = this.conversations.find((conversation) => this.normalizePhone(conversation.phoneNumber) === normalizedPhone);
+    return matchingConversation?.clientName || matchingConversation?.phoneNumber || 'New WhatsApp message';
+  }
+
+  private trimNotificationHistory(): void {
+    const maxEntries = 200;
+    if (this.notifiedIncomingKeys.size <= maxEntries) {
+      return;
+    }
+
+    const entries = Array.from(this.notifiedIncomingKeys.values());
+    const overflow = entries.length - maxEntries;
+    entries.slice(0, overflow).forEach((entry) => this.notifiedIncomingKeys.delete(entry));
   }
 
   private addOptimisticOutgoingMessage(
